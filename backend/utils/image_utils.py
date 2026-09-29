@@ -44,8 +44,9 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
 
 def detect_orientation(image: np.ndarray, ocr_engine) -> Tuple[int, Optional[int]]:
     """
-    Detect page orientation. Check 0 deg first; if table headers or text are found,
-    skip full multi-pass OCR on all 4 orientations to save CPU and memory.
+    Detect page orientation. Checks horizontal text geometry (aspect ratio) and keywords.
+    Crucially ensures text is horizontal (width >> height) to prevent sideways (90°/270°)
+    transposition of table columns into rows.
     """
     rotation_flags = {
         0: None,
@@ -54,27 +55,33 @@ def detect_orientation(image: np.ndarray, ocr_engine) -> Tuple[int, Optional[int
         270: cv2.ROTATE_90_COUNTERCLOCKWISE
     }
     
-    target_keywords = ['overreader', 'patient id', 'patient full', 'visit number', 'order number', 'acquisition']
+    target_keywords = [
+        'overreader', 'patient id', 'patient full', 'date of birth', 
+        'visit number', 'order number', 'acquisition', 'test type', 
+        'resting ecg', 'ecg', 'cardiology'
+    ]
 
-    # Downscale to max 500px for orientation check — reduces peak memory
-    # during the 4-angle OCR sweep from ~6 MB to ~1.5 MB per test image.
+    # Maintain high enough resolution (up to 1100px) so small text remains legible for OCR
     h, w = image.shape[:2]
-    scale = min(1.0, 500.0 / max(h, w))
+    scale = min(1.0, 1100.0 / max(h, w))
     preview_img = cv2.resize(image, (int(w * scale), int(h * scale)),
                              interpolation=cv2.INTER_AREA) if scale < 1.0 else image
 
-    # Fast path: check 0 degrees first.
-    # Require near-perfect keyword match (>= 5/6) to skip full angle sweep —
-    # rotated PDFs can still match some keywords via flipped/mirrored OCR text.
+    # Fast path: test 0 degrees first
     results_0 = ocr_engine.run_ocr(preview_img)
     if results_0:
         full_text_0 = " ".join([item['text'].lower() for item in results_0])
         kw_count_0 = sum(1 for kw in target_keywords if kw in full_text_0)
-        if kw_count_0 >= 5:
+        w_h_0 = [(item['bbox'][2] - item['bbox'][0]) / max(1.0, item['bbox'][3] - item['bbox'][1]) for item in results_0]
+        avg_aspect_0 = float(np.mean(w_h_0)) if w_h_0 else 0.0
+        horiz_0 = sum(1 for r in w_h_0 if r >= 1.2) / len(w_h_0) if w_h_0 else 0.0
+        
+        # If 0 deg has clear horizontal text and multiple matching keywords, accept immediately
+        if avg_aspect_0 >= 1.8 and horiz_0 >= 0.70 and kw_count_0 >= 5:
             return 0, None
 
     best_angle = 0
-    best_score = -1.0
+    best_score = -99999.0
     
     for angle in [0, 90, 180, 270]:
         flag = rotation_flags[angle]
@@ -85,24 +92,24 @@ def detect_orientation(image: np.ndarray, ocr_engine) -> Tuple[int, Optional[int
             continue
             
         w_h_ratios = []
-        kw_count = 0
-        
         full_text = " ".join([item['text'].lower() for item in results])
-        for kw in target_keywords:
-            if kw in full_text:
-                kw_count += 1
+        kw_count = sum(1 for kw in target_keywords if kw in full_text)
                 
         for item in results:
             bbox = item['bbox']
-            w = max(1.0, bbox[2] - bbox[0])
-            h = max(1.0, bbox[3] - bbox[1])
-            w_h_ratios.append(w / h)
+            bw = max(1.0, bbox[2] - bbox[0])
+            bh = max(1.0, bbox[3] - bbox[1])
+            w_h_ratios.append(bw / bh)
             
-        avg_aspect_ratio = np.mean(w_h_ratios) if w_h_ratios else 0.0
+        avg_aspect_ratio = float(np.mean(w_h_ratios)) if w_h_ratios else 0.0
+        horiz_count = sum(1 for r in w_h_ratios if r >= 1.2)
+        horiz_ratio = horiz_count / len(w_h_ratios) if w_h_ratios else 0.0
         
-        # Combined score: Header keywords get huge weight, aspect ratio breaks ties
-        # Horizontal text in standard reports has aspect ratio > 2.0 (often > 5.0)
-        score = (kw_count * 10.0) + avg_aspect_ratio
+        # Severe penalty if text bounding boxes are predominantly vertical (sideways)
+        if avg_aspect_ratio < 0.9 or horiz_ratio < 0.40:
+            score = -1000.0 + (kw_count * 2.0)
+        else:
+            score = (kw_count * 25.0) + (horiz_ratio * 20.0) + min(avg_aspect_ratio, 6.0) + (len(results) * 0.02)
         
         if score > best_score:
             best_score = score
