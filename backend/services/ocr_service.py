@@ -14,8 +14,10 @@ import rapidocr_onnxruntime.utils as r_utils
 # Patch SessionOptions in rapidocr_onnxruntime.utils so InferenceSession uses only 1 thread.
 # On cloud hosts like Render (which have 32-64 host cores), ONNX defaults to 64 threads,
 # exhausting 512MB RAM instantly during model load/inference.
+_orig_SessionOptions = onnxruntime.SessionOptions
+
 def _create_low_mem_session_options():
-    opt = onnxruntime.SessionOptions()
+    opt = _orig_SessionOptions()
     opt.intra_op_num_threads = 1
     opt.inter_op_num_threads = 1
     opt.enable_cpu_mem_arena = False
