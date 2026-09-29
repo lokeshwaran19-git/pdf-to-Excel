@@ -1,13 +1,26 @@
+import onnxruntime
 import numpy as np
 from typing import List, Dict, Any
 from rapidocr_onnxruntime import RapidOCR
+
+# Patch SessionOptions before RapidOCR loads ONNX models.
+# Limiting threads reduces peak RSS memory on constrained hosts (Render free tier).
+_OrigSessionOptions = onnxruntime.SessionOptions
+class _LowMemSessionOptions(_OrigSessionOptions):
+    def __init__(self):
+        super().__init__()
+        self.intra_op_num_threads = 1
+        self.inter_op_num_threads = 1
+        self.enable_cpu_mem_arena = False
+onnxruntime.SessionOptions = _LowMemSessionOptions
 
 class OCRService:
     _instance = None
 
     def __init__(self):
-        # Initialize RapidOCR (ONNX engine for PaddleOCR PP-OCR models)
-        self.engine = RapidOCR()
+        # Initialize RapidOCR without angle classifier to save ~25 MB RAM.
+        # Orientation is handled via our own detect_orientation() in image_utils.
+        self.engine = RapidOCR(use_angle_cls=False)
 
     @classmethod
     def get_instance(cls):

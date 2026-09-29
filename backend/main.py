@@ -86,11 +86,26 @@ def convert_pdf_to_excel(file: UploadFile = File(...)):
             f.write(pdf_bytes)
 
         # 2. Render PDF pages to high-resolution images
-        page_images = PDFService.render_pdf_to_images(pdf_bytes, dpi=150)
+        # DPI 130 balances OCR accuracy vs. memory usage on constrained hosts (Render free tier).
+        page_images = PDFService.render_pdf_to_images(pdf_bytes, dpi=130)
+
+        # Free raw PDF bytes from memory immediately after rendering;
+        # only the NumPy image arrays are needed hereafter.
+        del pdf_bytes
+        gc.collect()
+
         page_count = len(page_images)
 
         if page_count == 0:
             raise HTTPException(status_code=400, detail="PDF contains no renderable pages.")
+
+        # Guard against excessively large PDFs that would OOM the server
+        MAX_PAGES = 20
+        if page_count > MAX_PAGES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"PDF has {page_count} pages. Maximum supported is {MAX_PAGES} pages."
+            )
 
         # 3. Initialize OCR and Table Extraction Services
         ocr_service = OCRService.get_instance()

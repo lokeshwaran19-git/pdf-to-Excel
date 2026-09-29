@@ -45,11 +45,14 @@ class TableService:
             target_keywords = ['overreader', 'patient id', 'patient full', 'visit number', 'order number', 'acquisition']
             kw_count = sum(1 for kw in target_keywords if kw in full_text)
 
-            if kw_count >= 2 or len(ocr_items) > 50:
+            # Only skip orientation detection if ALL 6 target keywords are found at 0°.
+            # Fewer matches can occur even for rotated PDFs (OCR reads mirrored/flipped text),
+            # so a low threshold would incorrectly skip rotation detection for rotated pages.
+            if kw_count == len(target_keywords):
                 angle = 0
                 rotated_img = raw_img
             else:
-                # 2. Check rotated orientations (90, 180, 270) only if 0 degrees had insufficient text
+                # Check rotated orientations (90, 180, 270) to find the correct orientation
                 angle, rot_flag = detect_orientation(raw_img, self.ocr_service)
                 if angle != 0:
                     rotated_img = rotate_image(raw_img, angle)

@@ -51,16 +51,17 @@ def detect_orientation(image: np.ndarray, ocr_engine) -> Tuple[int, Optional[int
 
     # Downscale image copy for quick orientation testing to prevent high memory usage
     h, w = image.shape[:2]
-    scale = min(1.0, 1000.0 / max(h, w))
+    scale = min(1.0, 800.0 / max(h, w))
     preview_img = cv2.resize(image, (int(w * scale), int(h * scale))) if scale < 1.0 else image
 
-    # Fast path: check 0 degrees first
+    # Fast path: check 0 degrees first.
+    # Require near-perfect keyword match (>= 5/6) to skip full angle sweep —
+    # rotated PDFs can still match some keywords via flipped/mirrored OCR text.
     results_0 = ocr_engine.run_ocr(preview_img)
     if results_0:
         full_text_0 = " ".join([item['text'].lower() for item in results_0])
         kw_count_0 = sum(1 for kw in target_keywords if kw in full_text_0)
-        # If headers are already detected at 0 degrees, no rotation needed!
-        if kw_count_0 >= 2:
+        if kw_count_0 >= 5:
             return 0, None
 
     best_angle = 0

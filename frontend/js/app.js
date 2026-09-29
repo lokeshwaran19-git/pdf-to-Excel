@@ -7,8 +7,12 @@
 // set this to your Render backend URL. Leave empty string '' to use same-origin.
 const RENDER_BACKEND_URL = 'https://pdf-to-excel-n2ho.onrender.com';
 
-// Auto-detect: if we're NOT on the Render domain, use the full Render URL
-const API_BASE_URL = window.location.hostname.includes('onrender.com')
+// Auto-detect:
+// - On Render (onrender.com): use same-origin (empty string)
+// - On localhost / 127.0.0.1: use same-origin (empty string) — local FastAPI serves frontend
+// - Any other remote host: use Render backend URL
+const _host = window.location.hostname;
+const API_BASE_URL = (_host === 'localhost' || _host === '127.0.0.1' || _host.includes('onrender.com'))
   ? ''
   : RENDER_BACKEND_URL;
 // ───────────────────────────────────────────────────────────────────────────
