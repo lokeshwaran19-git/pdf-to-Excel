@@ -109,12 +109,11 @@ const UploadManager = {
     // Real processing stage steps
     const stages = [
       { pct: 15, text: "Uploading PDF document..." },
-      { pct: 30, text: "Analyzing PDF page orientation..." },
-      { pct: 45, text: "Rendering pages & preprocessing contrast..." },
-      { pct: 60, text: "Running PaddleOCR engine..." },
-      { pct: 75, text: "Detecting table boundaries & columns..." },
-      { pct: 85, text: "Reconstructing rows & cell fields..." },
-      { pct: 95, text: "Validating data & generating Excel file..." }
+      { pct: 30, text: "Rendering pages & preprocessing contrast..." },
+      { pct: 50, text: "Running AI OCR engine (reading text & cells)..." },
+      { pct: 70, text: "Detecting table boundaries & columns..." },
+      { pct: 85, text: "Reconstructing rows & formatting cells..." },
+      { pct: 92, text: "Validating data & generating Excel spreadsheet..." }
     ];
 
     let currentStage = 0;
@@ -124,8 +123,11 @@ const UploadManager = {
         progressBar.style.width = `${stage.pct}%`;
         progressStatus.textContent = stage.text;
         currentStage++;
+      } else {
+        // Keep user informed if processing is taking longer for multi-page documents
+        progressStatus.textContent = "AI engine processing pages (almost ready)...";
       }
-    }, 600);
+    }, 1800);
 
     const formData = new FormData();
     formData.append("file", this.selectedFile);
