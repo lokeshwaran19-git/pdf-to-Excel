@@ -54,6 +54,7 @@ class TableService:
             else:
                 # Check rotated orientations (90, 180, 270) to find the correct orientation
                 angle, rot_flag = detect_orientation(raw_img, self.ocr_service)
+                gc.collect()  # free orientation-check preview image before full-res OCR
                 if angle != 0:
                     rotated_img = rotate_image(raw_img, angle)
                     processed_img = preprocess_image(rotated_img)

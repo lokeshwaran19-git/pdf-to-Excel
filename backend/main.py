@@ -124,8 +124,10 @@ def convert_pdf_to_excel(file: UploadFile = File(...)):
             f.write(pdf_bytes)
 
         # 2. Render PDF pages to high-resolution images
-        # DPI 130 balances OCR accuracy vs. memory usage on constrained hosts (Render free tier).
-        page_images = PDFService.render_pdf_to_images(pdf_bytes, dpi=130)
+        # DPI 96 balances OCR accuracy vs. memory usage on constrained hosts (Render free tier ~512MB).
+        # At DPI 130 a typical A4 landscape page = ~1700×1300×3 bytes ≈ 6.6 MB per page in RAM.
+        # At DPI 96 the same page ≈ ~1200×930×3 bytes ≈ 3.4 MB — a 48% saving.
+        page_images = PDFService.render_pdf_to_images(pdf_bytes, dpi=96)
 
         # Free raw PDF bytes from memory immediately after rendering;
         # only the NumPy image arrays are needed hereafter.
@@ -138,7 +140,7 @@ def convert_pdf_to_excel(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="PDF contains no renderable pages.")
 
         # Guard against excessively large PDFs that would OOM the server
-        MAX_PAGES = 20
+        MAX_PAGES = 10
         if page_count > MAX_PAGES:
             raise HTTPException(
                 status_code=400,

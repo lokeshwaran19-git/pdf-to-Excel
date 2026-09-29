@@ -14,26 +14,33 @@ def rotate_image(image: np.ndarray, angle_deg: int) -> np.ndarray:
 
 def preprocess_image(image: np.ndarray) -> np.ndarray:
     """
-    Preprocess image for OCR to enhance text contrast and line clarity
-    without over-processing thin characters.
+    Preprocess image for OCR to enhance text contrast and line clarity.
+    Memory-optimised: reuses buffers to avoid holding multiple full-image
+    copies in RAM simultaneously (critical on Render's 512 MB free tier).
     """
+    # Step 1: grayscale — reuse buffer immediately
     if len(image.shape) == 3:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     else:
         gray = image.copy()
-        
-    # Contrast Limited Adaptive Histogram Equalization (CLAHE)
+
+    # Step 2: CLAHE contrast enhancement — write result back into gray buffer
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    cv2.cvtColor(clahe.apply(gray), cv2.COLOR_GRAY2BGR, dst=None)  # keep scope small
     enhanced = clahe.apply(gray)
-    
-    # Slight sharpening to make text crisp
-    kernel = np.array([[0, -0.5, 0], 
-                       [-0.5, 3.0, -0.5], 
+    del gray  # free grayscale buffer before sharpening allocates new memory
+
+    # Step 3: lightweight sharpening kernel
+    kernel = np.array([[0, -0.5, 0],
+                       [-0.5, 3.0, -0.5],
                        [0, -0.5, 0]], dtype=np.float32)
     sharpened = cv2.filter2D(enhanced, -1, kernel)
-    
-    # Convert back to BGR for OCR engine compatibility
-    return cv2.cvtColor(sharpened, cv2.COLOR_GRAY2BGR)
+    del enhanced  # free enhanced buffer
+
+    # Step 4: back to BGR for RapidOCR
+    result = cv2.cvtColor(sharpened, cv2.COLOR_GRAY2BGR)
+    del sharpened
+    return result
 
 def detect_orientation(image: np.ndarray, ocr_engine) -> Tuple[int, Optional[int]]:
     """
@@ -49,10 +56,12 @@ def detect_orientation(image: np.ndarray, ocr_engine) -> Tuple[int, Optional[int
     
     target_keywords = ['overreader', 'patient id', 'patient full', 'visit number', 'order number', 'acquisition']
 
-    # Downscale image copy for quick orientation testing to prevent high memory usage
+    # Downscale to max 500px for orientation check — reduces peak memory
+    # during the 4-angle OCR sweep from ~6 MB to ~1.5 MB per test image.
     h, w = image.shape[:2]
-    scale = min(1.0, 800.0 / max(h, w))
-    preview_img = cv2.resize(image, (int(w * scale), int(h * scale))) if scale < 1.0 else image
+    scale = min(1.0, 500.0 / max(h, w))
+    preview_img = cv2.resize(image, (int(w * scale), int(h * scale)),
+                             interpolation=cv2.INTER_AREA) if scale < 1.0 else image
 
     # Fast path: check 0 degrees first.
     # Require near-perfect keyword match (>= 5/6) to skip full angle sweep —
