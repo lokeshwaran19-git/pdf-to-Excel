@@ -194,41 +194,6 @@ def download_excel(job_id: str, background_tasks: BackgroundTasks):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-@app.get("/api/debug/{job_id}")
-def get_debug_info(job_id: str, page: int = 1):
-    """Developer debug endpoint to visualize bounding boxes, rows, columns, and table boundary."""
-    if job_id not in JOBS_CACHE:
-        raise HTTPException(status_code=404, detail="Job ID not found.")
+# Debug endpoint removed to avoid memory issues and missing page images.
+# If needed, re-implement with on-demand PDF rendering.
 
-    job_info = JOBS_CACHE[job_id]
-    debug_list = job_info.get("debug_info", [])
-    page_images = job_info.get("page_images", [])
-
-    if page < 1 or page > len(debug_list):
-        raise HTTPException(status_code=400, detail="Invalid page index.")
-
-    p_info = debug_list[page - 1]
-    raw_img = page_images[page - 1]
-
-    # Rotate raw image to page orientation
-    rot_img = rotate_image(raw_img, p_info["orientation"])
-
-    # Draw debug annotations: Blue = OCR, Green = Rows, Red = Cols, Purple = Table
-    debug_img = draw_debug_annotations(
-        rot_img,
-        p_info["ocr_items"],
-        p_info["rows"],
-        p_info["col_bounds"],
-        table_bounds={"x_min": 0, "y_min": p_info["header_row_y"], "x_max": rot_img.shape[1], "y_max": p_info["footer_y"]}
-    )
-
-    # Encode debug image to PNG
-    success, encoded_img = cv2.imencode(".png", debug_img)
-    if not success:
-        raise HTTPException(status_code=500, detail="Could not encode debug image.")
-
-    temp_img_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-    temp_img_file.write(encoded_img.tobytes())
-    temp_img_file.close()
-
-    return FileResponse(path=temp_img_file.name, media_type="image/png")

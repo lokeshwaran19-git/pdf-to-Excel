@@ -139,8 +139,12 @@ const UploadManager = {
       clearInterval(interval);
 
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.detail || 'Conversion failed.');
+        let errMsg = `Server error (${response.status}: ${response.statusText || 'Unknown error'})`;
+        try {
+          const errData = await response.json();
+          if (errData && errData.detail) errMsg = errData.detail;
+        } catch (_) {}
+        throw new Error(errMsg);
       }
 
       const result = await response.json();

@@ -37,12 +37,9 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
 
 def detect_orientation(image: np.ndarray, ocr_engine) -> Tuple[int, Optional[int]]:
     """
-    Automatically detect page orientation (0, 90, 180, 270 degrees).
-    Uses bounding box aspect ratios (horizontal text has width > height)
-    and table header keyword detection.
+    Detect page orientation. Check 0 deg first; if table headers or text are found,
+    skip full multi-pass OCR on all 4 orientations to save CPU and memory.
     """
-    best_angle = 0
-    best_score = -1.0
     rotation_flags = {
         0: None,
         90: cv2.ROTATE_90_CLOCKWISE,
@@ -51,12 +48,29 @@ def detect_orientation(image: np.ndarray, ocr_engine) -> Tuple[int, Optional[int
     }
     
     target_keywords = ['overreader', 'patient id', 'patient full', 'visit number', 'order number', 'acquisition']
+
+    # Downscale image copy for quick orientation testing to prevent high memory usage
+    h, w = image.shape[:2]
+    scale = min(1.0, 1000.0 / max(h, w))
+    preview_img = cv2.resize(image, (int(w * scale), int(h * scale))) if scale < 1.0 else image
+
+    # Fast path: check 0 degrees first
+    results_0 = ocr_engine.run_ocr(preview_img)
+    if results_0:
+        full_text_0 = " ".join([item['text'].lower() for item in results_0])
+        kw_count_0 = sum(1 for kw in target_keywords if kw in full_text_0)
+        # If headers are already detected at 0 degrees, no rotation needed!
+        if kw_count_0 >= 2:
+            return 0, None
+
+    best_angle = 0
+    best_score = -1.0
     
     for angle in [0, 90, 180, 270]:
         flag = rotation_flags[angle]
-        test_img = image if flag is None else cv2.rotate(image, flag)
+        test_img = preview_img if flag is None else cv2.rotate(preview_img, flag)
         
-        results = ocr_engine.run_ocr(test_img)
+        results = results_0 if angle == 0 else ocr_engine.run_ocr(test_img)
         if not results:
             continue
             
