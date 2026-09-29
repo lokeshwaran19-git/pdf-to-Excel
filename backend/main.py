@@ -1,4 +1,11 @@
 import os
+# Strictly constrain thread counts before any native C/C++ libraries load
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 import gc
 import uuid
 import shutil
@@ -19,54 +26,48 @@ import cv2
 
 app = FastAPI(title="PDF to Excel Extraction API", version="1.0.0")
 
-# Allowed origins — covers Cloudflare Workers frontend, local dev, and Render self-serving
-ALLOWED_ORIGINS = [
-    "https://pdf-to-excel.lokeshlap2828.workers.dev",  # Cloudflare Workers (production)
-    "http://localhost:8000",                             # Local FastAPI dev server
-    "http://127.0.0.1:8000",                            # Local FastAPI dev server (alias)
-    "http://localhost:3000",                             # Local frontend dev (if applicable)
-]
-
-# Enable CORS for local development and production
+# Enable CORS for Cloudflare Workers frontend, local dev, and any domain
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
 
 # ── Custom exception handlers to ensure CORS headers survive error responses ──
-# FastAPI's CORS middleware does NOT attach headers to unhandled exceptions;
-# this means the browser sees a misleading CORS error instead of the real error.
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "*",
+}
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    origin = request.headers.get("origin", "")
-    headers = {}
-    if origin in ALLOWED_ORIGINS:
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        headers["Access-Control-Allow-Headers"] = "*"
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
-        headers=headers,
+        headers=CORS_HEADERS,
     )
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
-    origin = request.headers.get("origin", "")
-    headers = {}
-    if origin in ALLOWED_ORIGINS:
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        headers["Access-Control-Allow-Headers"] = "*"
     return JSONResponse(
         status_code=500,
         content={"detail": f"Internal server error: {str(exc)}"},
-        headers=headers,
+        headers=CORS_HEADERS,
     )
+
+@app.on_event("startup")
+def startup_event():
+    """Warm up OCR service on startup to load ONNX models once into memory."""
+    print("Pre-loading OCR engine...")
+    try:
+        OCRService.get_instance()
+        print("OCR engine loaded successfully.")
+    except Exception as e:
+        print(f"Error pre-loading OCR engine: {e}")
 
 # Global in-memory storage for active jobs (store intermediate table data for editing/download)
 # Job directory stores output xlsx files securely, deleted upon download or after expiry

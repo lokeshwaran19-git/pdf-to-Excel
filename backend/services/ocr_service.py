@@ -1,18 +1,31 @@
+import os
+# Constrain thread count before any native libraries initialize
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 import onnxruntime
 import numpy as np
 from typing import List, Dict, Any
-from rapidocr_onnxruntime import RapidOCR
+import rapidocr_onnxruntime.utils as r_utils
 
-# Patch SessionOptions before RapidOCR loads ONNX models.
-# Limiting threads reduces peak RSS memory on constrained hosts (Render free tier).
-_OrigSessionOptions = onnxruntime.SessionOptions
-class _LowMemSessionOptions(_OrigSessionOptions):
-    def __init__(self):
-        super().__init__()
-        self.intra_op_num_threads = 1
-        self.inter_op_num_threads = 1
-        self.enable_cpu_mem_arena = False
-onnxruntime.SessionOptions = _LowMemSessionOptions
+# Patch SessionOptions in rapidocr_onnxruntime.utils so InferenceSession uses only 1 thread.
+# On cloud hosts like Render (which have 32-64 host cores), ONNX defaults to 64 threads,
+# exhausting 512MB RAM instantly during model load/inference.
+def _create_low_mem_session_options():
+    opt = onnxruntime.SessionOptions()
+    opt.intra_op_num_threads = 1
+    opt.inter_op_num_threads = 1
+    opt.enable_cpu_mem_arena = False
+    opt.execution_mode = onnxruntime.ExecutionMode.ORT_SEQUENTIAL
+    return opt
+
+r_utils.SessionOptions = _create_low_mem_session_options
+onnxruntime.SessionOptions = _create_low_mem_session_options
+
+from rapidocr_onnxruntime import RapidOCR
 
 class OCRService:
     _instance = None
