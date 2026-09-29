@@ -5,7 +5,7 @@ from typing import List
 
 class PDFService:
     @staticmethod
-    def render_pdf_to_images(pdf_bytes: bytes, dpi: int = 300) -> List[np.ndarray]:
+    def render_pdf_to_images(pdf_bytes: bytes, dpi: int = 150) -> List[np.ndarray]:
         """
         Render all pages of a PDF document into high-resolution NumPy images (BGR format).
         """

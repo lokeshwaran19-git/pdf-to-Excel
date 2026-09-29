@@ -80,8 +80,7 @@ class TableService:
                 "header_row_y": header_row_y,
                 "footer_y": footer_y,
                 "rotated_shape": [rotated_img.shape[1], rotated_img.shape[0]],
-                "ocr_items": ocr_items,
-                "rows": rows,
+                # ocr_items and rows omitted to reduce memory usage on server
                 "col_bounds": col_bounds
             })
 

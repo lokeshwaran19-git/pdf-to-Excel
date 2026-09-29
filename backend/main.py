@@ -83,7 +83,7 @@ async def convert_pdf_to_excel(file: UploadFile = File(...)):
             f.write(pdf_bytes)
 
         # 2. Render PDF pages to high-resolution images
-        page_images = PDFService.render_pdf_to_images(pdf_bytes, dpi=300)
+        page_images = PDFService.render_pdf_to_images(pdf_bytes, dpi=150)
         page_count = len(page_images)
 
         if page_count == 0:
@@ -107,6 +107,9 @@ async def convert_pdf_to_excel(file: UploadFile = File(...)):
         ExcelService.create_excel_file(headers, table_data, excel_path)
 
         # 6. Cache job details for download & edit export
+        # Free large image arrays from memory before caching
+        del page_images
+
         JOBS_CACHE[job_id] = {
             "filename": file.filename,
             "out_filename": out_filename,
@@ -114,8 +117,7 @@ async def convert_pdf_to_excel(file: UploadFile = File(...)):
             "headers": headers,
             "table_data": table_data,
             "low_conf_cells": low_conf_cells,
-            "debug_info": extraction_result.get("debug_info", []),
-            "page_images": page_images # Keep references in memory for debug visualization
+            "debug_info": extraction_result.get("debug_info", [])
         }
 
         # 7. Securely delete temporary PDF file
