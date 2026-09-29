@@ -131,7 +131,7 @@ const UploadManager = {
     formData.append("file", this.selectedFile);
 
     try {
-      const response = await fetch('/api/convert', {
+      const response = await fetch(`${API_BASE_URL}/api/convert`, {
         method: 'POST',
         body: formData
       });

@@ -176,7 +176,7 @@ const PreviewManager = {
 
         try {
           // Push updated edited table data to backend export endpoint
-          const res = await fetch(`/api/export/${this.currentJob.job_id}`, {
+          const res = await fetch(`${API_BASE_URL}/api/export/${this.currentJob.job_id}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -187,7 +187,7 @@ const PreviewManager = {
 
           if (res.ok) {
             // Trigger browser file download
-            window.location.href = `/api/download/${this.currentJob.job_id}`;
+            window.location.href = `${API_BASE_URL}/api/download/${this.currentJob.job_id}`;
             UI.showToast('Download started!', 'success');
           } else {
             throw new Error('Export failed');

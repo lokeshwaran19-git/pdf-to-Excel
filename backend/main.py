@@ -21,8 +21,10 @@ app = FastAPI(title="PDF to Excel Extraction API", version="1.0.0")
 # Enable CORS for local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[
+        "*",  # Allow all origins (frontend may be on Cloudflare Workers or other CDN)
+    ],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
