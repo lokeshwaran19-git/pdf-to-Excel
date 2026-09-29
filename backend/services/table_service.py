@@ -1,3 +1,4 @@
+import gc
 import numpy as np
 from typing import List, Dict, Any, Tuple, Optional
 from backend.utils.image_utils import detect_orientation, rotate_image, preprocess_image
@@ -36,15 +37,26 @@ class TableService:
         debug_info = []
 
         for page_num, raw_img in enumerate(page_images, start=1):
-            # 1. Orientation Detection & Rotation
-            angle, rot_flag = detect_orientation(raw_img, self.ocr_service)
-            rotated_img = rotate_image(raw_img, angle)
-
-            # 2. Image Preprocessing
-            processed_img = preprocess_image(rotated_img)
-
-            # 3. OCR Engine
+            # 1. Fast path: run OCR on 0 degrees preprocessed image
+            processed_img = preprocess_image(raw_img)
             ocr_items = self.ocr_service.run_ocr(processed_img)
+
+            full_text = " ".join([it['text'].lower() for it in ocr_items])
+            target_keywords = ['overreader', 'patient id', 'patient full', 'visit number', 'order number', 'acquisition']
+            kw_count = sum(1 for kw in target_keywords if kw in full_text)
+
+            if kw_count >= 2 or len(ocr_items) > 50:
+                angle = 0
+                rotated_img = raw_img
+            else:
+                # 2. Check rotated orientations (90, 180, 270) only if 0 degrees had insufficient text
+                angle, rot_flag = detect_orientation(raw_img, self.ocr_service)
+                if angle != 0:
+                    rotated_img = rotate_image(raw_img, angle)
+                    processed_img = preprocess_image(rotated_img)
+                    ocr_items = self.ocr_service.run_ocr(processed_img)
+                else:
+                    rotated_img = raw_img
 
             # 4. Table Region & Header Detection
             header_row_y, header_items = self._find_header_row(ocr_items)
@@ -83,6 +95,9 @@ class TableService:
                 # ocr_items and rows omitted to reduce memory usage on server
                 "col_bounds": col_bounds
             })
+
+            del processed_img, rotated_img
+            gc.collect()
 
         # Calculate overall quality metrics
         if all_cell_confidences:

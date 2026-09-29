@@ -1,4 +1,5 @@
 import os
+import gc
 import uuid
 import shutil
 import tempfile
@@ -66,7 +67,7 @@ def health_check():
     return {"status": "ok"}
 
 @app.post("/api/convert")
-async def convert_pdf_to_excel(file: UploadFile = File(...)):
+def convert_pdf_to_excel(file: UploadFile = File(...)):
     """
     Core Conversion Endpoint:
     Upload PDF -> Render Pages -> Detect Rotation -> Run PaddleOCR -> Detect Table ->
@@ -80,7 +81,7 @@ async def convert_pdf_to_excel(file: UploadFile = File(...)):
 
     try:
         # 1. Read PDF file contents into memory & save temporary file
-        pdf_bytes = await file.read()
+        pdf_bytes = file.file.read()
         with open(temp_pdf_path, "wb") as f:
             f.write(pdf_bytes)
 
@@ -111,6 +112,7 @@ async def convert_pdf_to_excel(file: UploadFile = File(...)):
         # 6. Cache job details for download & edit export
         # Free large image arrays from memory before caching
         del page_images
+        gc.collect()
 
         JOBS_CACHE[job_id] = {
             "filename": file.filename,
