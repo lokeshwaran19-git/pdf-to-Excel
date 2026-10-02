@@ -9,23 +9,23 @@ const UI = {
     document.documentElement.setAttribute('data-theme', savedTheme);
     this.updateThemeButtonIcon(savedTheme);
 
-    const themeToggleBtn = document.getElementById('theme-toggle');
-    if (themeToggleBtn) {
-      themeToggleBtn.addEventListener('click', () => {
+    const toggleBtns = document.querySelectorAll('.theme-toggle-btn, #theme-toggle, #theme-toggle-mobile');
+    toggleBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
         const currentTheme = document.documentElement.getAttribute('data-theme');
         const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', newTheme);
         localStorage.setItem('theme', newTheme);
         this.updateThemeButtonIcon(newTheme);
       });
-    }
+    });
   },
 
   updateThemeButtonIcon(theme) {
-    const btn = document.getElementById('theme-toggle');
-    if (btn) {
+    const btns = document.querySelectorAll('.theme-toggle-btn, #theme-toggle, #theme-toggle-mobile');
+    btns.forEach(btn => {
       btn.innerHTML = theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
-    }
+    });
   },
 
   showToast(message, type = 'info') {

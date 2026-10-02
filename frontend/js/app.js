@@ -20,46 +20,56 @@ const API_BASE_URL = (_host === 'localhost' || _host === '127.0.0.1' || _host.in
 document.addEventListener('DOMContentLoaded', () => {
   console.log('PDF to Excel SaaS Application Initialized.');
 
+  const hamburgerBtn = document.getElementById('hamburger-btn');
+  const mobileNav    = document.getElementById('mobile-nav');
+
+  const closeMobileNav = () => {
+    if (mobileNav) mobileNav.classList.remove('open');
+    if (hamburgerBtn) {
+      hamburgerBtn.classList.remove('active');
+      hamburgerBtn.setAttribute('aria-expanded', 'false');
+    }
+  };
+
   // ── Smooth scroll for anchor nav links ──────────────────
   document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
-      e.preventDefault();
       const targetId = this.getAttribute('href');
       if (targetId === '#') return;
 
       const targetEl = document.querySelector(targetId);
       if (targetEl) {
+        e.preventDefault();
         targetEl.scrollIntoView({ behavior: 'smooth' });
       }
 
-      // Close mobile nav if open
-      const mobileNav = document.getElementById('mobile-nav');
-      if (mobileNav) mobileNav.classList.remove('open');
+      closeMobileNav();
     });
   });
 
-  // ── Convert PDF button in header → scroll to upload ─────
-  const convertHeaderBtn = document.getElementById('convert-header-btn');
-  if (convertHeaderBtn) {
-    convertHeaderBtn.addEventListener('click', () => {
+  // ── Convert PDF buttons in header / mobile drawer → scroll to upload ──
+  const convertBtns = document.querySelectorAll('#convert-header-btn, #convert-mobile-btn');
+  convertBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
       const uploadCard = document.getElementById('upload-section');
       if (uploadCard) uploadCard.scrollIntoView({ behavior: 'smooth' });
+      closeMobileNav();
     });
-  }
+  });
 
   // ── Hamburger mobile menu toggle ─────────────────────────
-  const hamburgerBtn = document.getElementById('hamburger-btn');
-  const mobileNav    = document.getElementById('mobile-nav');
-
   if (hamburgerBtn && mobileNav) {
-    hamburgerBtn.addEventListener('click', () => {
-      mobileNav.classList.toggle('open');
+    hamburgerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = mobileNav.classList.toggle('open');
+      hamburgerBtn.classList.toggle('active', isOpen);
+      hamburgerBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     });
 
     // Close on outside click
     document.addEventListener('click', (e) => {
       if (!hamburgerBtn.contains(e.target) && !mobileNav.contains(e.target)) {
-        mobileNav.classList.remove('open');
+        closeMobileNav();
       }
     });
   }

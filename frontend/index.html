@@ -2,7 +2,7 @@
 <html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>PDF to Excel - Convert Rotated &amp; Scanned PDF Tables to XLSX</title>
   <meta name="description" content="Production-quality PDF to Excel extraction engine. Convert rotated, scanned, and image-based PDF reports into editable Excel spreadsheets with AI OCR precision.">
 
@@ -15,39 +15,42 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
 
   <!-- CSS Styles -->
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=4">
 </head>
 <body>
 
   <!-- Header / Navigation -->
   <header class="navbar">
     <div class="nav-container">
-      <a href="#" class="brand">
+      <a href="#hero-section" class="brand">
         <div class="brand-icon">📊</div>
         <span>PDF to Excel</span>
       </a>
 
+      <!-- Desktop Nav Links -->
       <ul class="nav-links" id="nav-links">
         <li><a href="#hero-section">Home</a></li>
-        <li><a href="#features">Features</a></li>
-        <li><a href="#privacy">Privacy</a></li>
         <li><a href="#about">About</a></li>
       </ul>
 
+      <!-- Desktop Actions + Mobile Hamburger Toggle -->
       <div class="nav-actions">
-        <button id="theme-toggle" class="theme-btn" aria-label="Toggle dark mode">🌙 Dark Mode</button>
-        <button id="convert-header-btn" class="btn btn-primary">Convert PDF</button>
-        <button class="hamburger-btn" id="hamburger-btn" aria-label="Open menu">
+        <button id="theme-toggle" class="theme-btn theme-toggle-btn desktop-only" aria-label="Toggle dark mode">🌙 Dark Mode</button>
+        <button id="convert-header-btn" class="btn btn-primary desktop-only">Convert PDF</button>
+        <button class="hamburger-btn" id="hamburger-btn" aria-label="Toggle mobile menu" aria-expanded="false">
           <span></span><span></span><span></span>
         </button>
       </div>
     </div>
-    <!-- Mobile nav drawer -->
+
+    <!-- Mobile Nav Drawer -->
     <div class="mobile-nav" id="mobile-nav">
-      <a href="#hero-section">Home</a>
-      <a href="#features">Features</a>
-      <a href="#privacy">Privacy</a>
-      <a href="#about">About</a>
+      <a href="#hero-section" class="mobile-nav-link">Home</a>
+      <a href="#about" class="mobile-nav-link">About</a>
+      <div class="mobile-nav-actions">
+        <button id="theme-toggle-mobile" class="theme-btn theme-toggle-btn mobile-theme-btn" aria-label="Toggle dark mode">🌙 Dark Mode</button>
+        <button id="convert-mobile-btn" class="btn btn-primary mobile-convert-btn">⚡ Convert PDF</button>
+      </div>
     </div>
   </header>
 
@@ -61,13 +64,8 @@
       <p>Extract structured tables from complex, scanned, or rotated PDF reports and convert them into editable Excel spreadsheets with full format fidelity.</p>
 
       <div class="hero-actions">
-        <label for="file-input" class="btn btn-primary" style="cursor: pointer;">📁 Upload PDF</label>
-        <a href="#upload-section" class="btn btn-secondary">Convert PDF</a>
-      </div>
-
-      <div class="privacy-badge">
-        <span>🔒</span>
-        <span>Your document is processed securely with zero permanent storage.</span>
+        <label for="file-input" class="btn btn-primary hero-btn-upload" style="cursor: pointer;">📁 Upload PDF</label>
+        <a href="#upload-section" class="btn btn-secondary hero-btn-convert">Convert PDF</a>
       </div>
     </section>
 
@@ -77,7 +75,7 @@
 
       <div id="drop-zone" class="drop-zone">
         <div class="drop-icon-wrap">
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg width="44" height="44" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect width="48" height="48" rx="12" fill="currentColor" fill-opacity="0.08"/>
             <path d="M14 36V12a2 2 0 0 1 2-2h12l8 8v18a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
             <path d="M28 10v8h8" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
@@ -95,7 +93,7 @@
       <div id="file-card" class="file-card" style="display: none;">
         <div class="file-info">
           <div class="file-icon-wrap">
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <svg width="34" height="34" viewBox="0 0 32 32" fill="none">
               <rect width="32" height="32" rx="8" fill="#FEE2E2"/>
               <path d="M9 24V8a1 1 0 0 1 1-1h8l6 6v11a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1z" fill="#EF4444" opacity="0.2" stroke="#EF4444" stroke-width="1.5"/>
               <path d="M17 7v6h6" stroke="#EF4444" stroke-width="1.5" stroke-linejoin="round"/>
@@ -108,7 +106,7 @@
           </div>
         </div>
 
-        <div style="display: flex; gap: 0.75rem; align-items: center; flex-shrink: 0;">
+        <div class="file-actions">
           <button id="remove-file-btn" class="btn btn-outline-danger">✕ Remove</button>
           <button id="convert-btn" class="btn btn-convert" disabled>
             <span class="btn-convert-icon">⚡</span>
@@ -124,7 +122,7 @@
         <div class="conv-animation">
           <!-- PDF Icon -->
           <div class="conv-icon conv-icon-pdf" id="anim-pdf">
-            <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+            <svg width="40" height="40" viewBox="0 0 44 44" fill="none">
               <rect width="44" height="44" rx="10" fill="#FEE2E2"/>
               <path d="M11 34V10a2 2 0 0 1 2-2h12l8 8v18a2 2 0 0 1-2 2H13a2 2 0 0 1-2-2z" fill="#EF4444" opacity="0.15" stroke="#EF4444" stroke-width="1.5"/>
               <path d="M25 8v8h8" stroke="#EF4444" stroke-width="1.5" stroke-linejoin="round"/>
@@ -143,7 +141,7 @@
 
           <!-- Excel Icon -->
           <div class="conv-icon conv-icon-xls" id="anim-excel">
-            <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+            <svg width="40" height="40" viewBox="0 0 44 44" fill="none">
               <rect width="44" height="44" rx="10" fill="#D1FAE5"/>
               <path d="M11 34V10a2 2 0 0 1 2-2h12l8 8v18a2 2 0 0 1-2 2H13a2 2 0 0 1-2-2z" fill="#10B981" opacity="0.15" stroke="#10B981" stroke-width="1.5"/>
               <path d="M25 8v8h8" stroke="#10B981" stroke-width="1.5" stroke-linejoin="round"/>
@@ -262,58 +260,25 @@
       </div>
     </section>
 
-    <!-- SECTION: FEATURES -->
-    <section id="features" style="margin-top: 5rem;">
-      <h2 style="font-size: 2rem; font-weight: 700; text-align: center; margin-bottom: 1rem;">Key Features</h2>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; margin-top: 2.5rem;">
-        <div class="feature-card">
-          <div class="feature-icon">🔄</div>
-          <h3>Rotated Table Auto-Correction</h3>
-          <p>Handles sideways 90° and upside-down scanned reports effortlessly before running character recognition.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">📑</div>
-          <h3>Multi-Page Header Merging</h3>
-          <p>Processes multi-page reports into a single consolidated table, automatically stripping repeated page headers.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🔢</div>
-          <h3>ID Leading Zero Preservation</h3>
-          <p>Patient IDs, Order Numbers, and Visit Numbers are explicitly formatted as text to prevent Excel digit truncation.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">✏️</div>
-          <h3>Interactive Spreadsheet Review</h3>
-          <p>Review and edit extracted values directly in the browser spreadsheet before downloading your formatted XLSX file.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- SECTION: PRIVACY -->
-    <section id="privacy" style="margin-top: 5rem; background: var(--bg-card); padding: 3rem; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
-      <h2 style="font-size: 1.75rem; font-weight: 700; margin-bottom: 1rem;">🔒 Enterprise Privacy &amp; Zero Data Retention</h2>
-      <p style="color: var(--text-muted); line-height: 1.7;">
-        Uploaded PDF documents are processed strictly on your application server backend. Intermediate rendered page images, temporary OCR artifacts, and temporary uploaded PDF files are automatically deleted after conversion and download.
-      </p>
-    </section>
-
     <!-- SECTION: ABOUT -->
-    <section id="about" style="margin-top: 4rem; text-align:center; padding-bottom: 2rem;">
-      <h2 style="font-size: 1.75rem; font-weight: 700; margin-bottom: 1rem;">About</h2>
-      <p style="color: var(--text-muted); max-width: 640px; margin: 0 auto; line-height: 1.7;">
-        PDF to Excel is a production-quality full-stack application that uses PyMuPDF, PaddleOCR, and OpenPyXL to extract structured data from rotated, scanned, and image-based PDF reports — converting them into properly formatted Excel spreadsheets.
-      </p>
+    <section id="about" class="about-section">
+      <div class="about-card">
+        <h2>About PDF to Excel</h2>
+        <p>
+          A production-quality document extraction system engineered with PyMuPDF, PaddleOCR, and OpenPyXL.
+          It accurately reconstructs structured data from rotated, scanned, and image-based PDF reports into fully formatted, editable Excel spreadsheets.
+        </p>
+      </div>
     </section>
 
   </main>
 
   <!-- Footer -->
   <footer>
-    <div class="nav-container" style="justify-content: space-between;">
+    <div class="nav-container footer-container">
       <p>© 2026 PDF to Excel Table Extraction System. All rights reserved.</p>
-      <div style="display: flex; gap: 1.5rem;">
-        <a href="#privacy" style="color: var(--text-muted); text-decoration: none;">Privacy Policy</a>
-        <a href="#about" style="color: var(--text-muted); text-decoration: none;">About</a>
+      <div class="footer-links">
+        <a href="#about">About</a>
       </div>
     </div>
   </footer>
@@ -322,10 +287,10 @@
   <div class="toast-container"></div>
 
   <!-- JavaScript Modules -->
-  <script src="js/ui.js?v=3"></script>
-  <script src="js/upload.js?v=3"></script>
-  <script src="js/preview.js?v=3"></script>
-  <script src="js/app.js?v=3"></script>
+  <script src="js/ui.js?v=4"></script>
+  <script src="js/upload.js?v=4"></script>
+  <script src="js/preview.js?v=4"></script>
+  <script src="js/app.js?v=4"></script>
 
 </body>
 </html>
