@@ -101,10 +101,12 @@ const UploadManager = {
     const progressContainer = document.getElementById('progress-container');
     const progressBar = document.getElementById('progress-bar-fill');
     const progressStatus = document.getElementById('progress-status');
+    const progressStateLabel = document.getElementById('progress-state-label');
     const convertBtn = document.getElementById('convert-btn');
 
     progressContainer.style.display = 'block';
     convertBtn.disabled = true;
+    if (progressStateLabel) progressStateLabel.textContent = 'Processing';
 
     // Real processing stage steps
     const stages = [
@@ -153,18 +155,39 @@ const UploadManager = {
 
       progressBar.style.width = '100%';
       progressStatus.textContent = 'Conversion Complete!';
+      if (progressStateLabel) progressStateLabel.textContent = 'Complete!';
 
       UI.showToast('Table extracted successfully!', 'success');
 
       setTimeout(() => {
+        progressContainer.style.display = 'none';
+        convertBtn.disabled = false;
         // Load interactive spreadsheet preview
         PreviewManager.renderTable(result);
-      }, 500);
+      }, 800);
 
     } catch (err) {
       clearInterval(interval);
-      progressStatus.textContent = 'Error during processing.';
+
+      // Reset progress bar to error state and hide after brief display
+      progressBar.style.width = '100%';
+      progressBar.style.background = 'var(--danger, #dc3545)';
+      progressStatus.textContent = '⚠ Conversion failed. Please try again.';
+      if (progressStateLabel) {
+        progressStateLabel.textContent = 'Failed';
+        progressStateLabel.style.color = 'var(--danger, #dc3545)';
+      }
+
       UI.showToast(err.message || 'An error occurred during extraction.', 'error');
+
+      setTimeout(() => {
+        progressContainer.style.display = 'none';
+        progressBar.style.width = '0%';
+        progressBar.style.background = '';
+        if (progressStateLabel) progressStateLabel.style.color = '';
+      }, 3000);
+
+    } finally {
       convertBtn.disabled = false;
     }
   }

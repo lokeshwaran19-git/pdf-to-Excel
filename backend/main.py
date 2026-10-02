@@ -26,29 +26,45 @@ import cv2
 
 app = FastAPI(title="PDF to Excel Extraction API", version="1.0.0")
 
-# Enable CORS for Cloudflare Workers frontend, local dev, and any domain
+# ── Allowed CORS origins ────────────────────────────────────────────────────
+# Production Cloudflare Workers frontend + local development origins.
+ALLOWED_ORIGINS = [
+    "https://pdf-to-excel.lokeshlap2828.workers.dev",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
 
 # ── Custom exception handlers to ensure CORS headers survive error responses ──
-CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "*",
-}
+def _get_cors_headers(request: Request) -> dict:
+    """Return CORS headers matching the request's origin, if allowed."""
+    origin = request.headers.get("origin", "")
+    allowed_origin = origin if origin in ALLOWED_ORIGINS else (ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*")
+    return {
+        "Access-Control-Allow-Origin": allowed_origin,
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "*",
+        "Vary": "Origin",
+    }
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
-        headers=CORS_HEADERS,
+        headers=_get_cors_headers(request),
     )
 
 @app.exception_handler(Exception)
@@ -56,7 +72,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content={"detail": f"Internal server error: {str(exc)}"},
-        headers=CORS_HEADERS,
+        headers=_get_cors_headers(request),
     )
 
 @app.on_event("startup")
