@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PDF to Excel - Convert Rotated & Scanned PDF Tables to XLSX</title>
+  <title>PDF to Excel - Convert Rotated &amp; Scanned PDF Tables to XLSX</title>
   <meta name="description" content="Production-quality PDF to Excel extraction engine. Convert rotated, scanned, and image-based PDF reports into editable Excel spreadsheets with AI OCR precision.">
-  
+
   <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  
+
   <!-- Favicon -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
 
@@ -27,9 +27,8 @@
         <span>PDF to Excel</span>
       </a>
 
-      <ul class="nav-links">
+      <ul class="nav-links" id="nav-links">
         <li><a href="#hero-section">Home</a></li>
-        <li><a href="#how-it-works">How It Works</a></li>
         <li><a href="#features">Features</a></li>
         <li><a href="#privacy">Privacy</a></li>
         <li><a href="#about">About</a></li>
@@ -38,7 +37,17 @@
       <div class="nav-actions">
         <button id="theme-toggle" class="theme-btn" aria-label="Toggle dark mode">🌙 Dark Mode</button>
         <button id="convert-header-btn" class="btn btn-primary">Convert PDF</button>
+        <button class="hamburger-btn" id="hamburger-btn" aria-label="Open menu">
+          <span></span><span></span><span></span>
+        </button>
       </div>
+    </div>
+    <!-- Mobile nav drawer -->
+    <div class="mobile-nav" id="mobile-nav">
+      <a href="#hero-section">Home</a>
+      <a href="#features">Features</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#about">About</a>
     </div>
   </header>
 
@@ -47,8 +56,8 @@
 
     <!-- HERO SECTION -->
     <section id="hero-section" class="hero">
-      <div class="hero-badge">⚡ AI-Powered Rotated & Scanned OCR Engine</div>
-      <h1>Convert PDF to Excel in Seconds</h1>
+      <div class="hero-badge">⚡ AI-Powered Rotated &amp; Scanned OCR Engine</div>
+      <h1>Convert PDF to Excel<br>in Seconds</h1>
       <p>Extract structured tables from complex, scanned, or rotated PDF reports and convert them into editable Excel spreadsheets with full format fidelity.</p>
 
       <div class="hero-actions">
@@ -67,40 +76,128 @@
       <input type="file" id="file-input" accept=".pdf" style="display: none;">
 
       <div id="drop-zone" class="drop-zone">
-        <div class="drop-icon">📄</div>
+        <div class="drop-icon-wrap">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="48" height="48" rx="12" fill="currentColor" fill-opacity="0.08"/>
+            <path d="M14 36V12a2 2 0 0 1 2-2h12l8 8v18a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M28 10v8h8" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M20 28l4-4 4 4M24 24v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
         <div class="drop-text">
           <h3>Drop your PDF file here</h3>
-          <p>or click to browse from your device</p>
-          <span style="font-size: 0.8rem; color: var(--text-muted);">Supports PDF files up to 25 MB</span>
+          <p>or <span class="drop-link">click to browse</span> from your device</p>
+          <span class="drop-hint">Supports PDF files up to 25 MB</span>
         </div>
       </div>
 
       <!-- File Details Card (Visible after selection) -->
       <div id="file-card" class="file-card" style="display: none;">
         <div class="file-info">
-          <div class="file-icon">📕</div>
+          <div class="file-icon-wrap">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+              <rect width="32" height="32" rx="8" fill="#FEE2E2"/>
+              <path d="M9 24V8a1 1 0 0 1 1-1h8l6 6v11a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1z" fill="#EF4444" opacity="0.2" stroke="#EF4444" stroke-width="1.5"/>
+              <path d="M17 7v6h6" stroke="#EF4444" stroke-width="1.5" stroke-linejoin="round"/>
+              <text x="11" y="21" font-family="sans-serif" font-size="6" font-weight="700" fill="#EF4444">PDF</text>
+            </svg>
+          </div>
           <div class="file-details">
             <h4 id="file-name">filename.pdf</h4>
-            <p><span id="file-size">0 MB</span> • Multi-page Document</p>
+            <p><span id="file-size">0 MB</span> • PDF Document</p>
           </div>
         </div>
 
-        <div style="display: flex; gap: 0.75rem;">
-          <button id="remove-file-btn" class="btn btn-outline-danger">Remove</button>
-          <button id="convert-btn" class="btn btn-primary" disabled>Convert PDF</button>
+        <div style="display: flex; gap: 0.75rem; align-items: center; flex-shrink: 0;">
+          <button id="remove-file-btn" class="btn btn-outline-danger">✕ Remove</button>
+          <button id="convert-btn" class="btn btn-convert" disabled>
+            <span class="btn-convert-icon">⚡</span>
+            <span class="btn-convert-text">Convert PDF</span>
+          </button>
         </div>
       </div>
 
-      <!-- Real Processing Stage Tracker -->
-      <div id="progress-container" class="progress-container">
-        <div class="progress-bar-bg">
-          <div id="progress-bar-fill" class="progress-bar-fill"></div>
+      <!-- ── CONVERSION PROGRESS CARD ── -->
+      <div id="conversion-card" class="conversion-card" style="display:none;">
+
+        <!-- Animated PDF → Excel flow -->
+        <div class="conv-animation">
+          <!-- PDF Icon -->
+          <div class="conv-icon conv-icon-pdf" id="anim-pdf">
+            <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+              <rect width="44" height="44" rx="10" fill="#FEE2E2"/>
+              <path d="M11 34V10a2 2 0 0 1 2-2h12l8 8v18a2 2 0 0 1-2 2H13a2 2 0 0 1-2-2z" fill="#EF4444" opacity="0.15" stroke="#EF4444" stroke-width="1.5"/>
+              <path d="M25 8v8h8" stroke="#EF4444" stroke-width="1.5" stroke-linejoin="round"/>
+              <text x="14" y="29" font-family="sans-serif" font-size="8" font-weight="800" fill="#EF4444">PDF</text>
+            </svg>
+          </div>
+
+          <!-- Animated arrow dots -->
+          <div class="conv-arrow-track">
+            <div class="conv-dot" style="animation-delay:0s"></div>
+            <div class="conv-dot" style="animation-delay:0.22s"></div>
+            <div class="conv-dot" style="animation-delay:0.44s"></div>
+            <div class="conv-dot" style="animation-delay:0.66s"></div>
+            <div class="conv-dot" style="animation-delay:0.88s"></div>
+          </div>
+
+          <!-- Excel Icon -->
+          <div class="conv-icon conv-icon-xls" id="anim-excel">
+            <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+              <rect width="44" height="44" rx="10" fill="#D1FAE5"/>
+              <path d="M11 34V10a2 2 0 0 1 2-2h12l8 8v18a2 2 0 0 1-2 2H13a2 2 0 0 1-2-2z" fill="#10B981" opacity="0.15" stroke="#10B981" stroke-width="1.5"/>
+              <path d="M25 8v8h8" stroke="#10B981" stroke-width="1.5" stroke-linejoin="round"/>
+              <text x="13" y="29" font-family="sans-serif" font-size="7" font-weight="800" fill="#10B981">XLS</text>
+            </svg>
+          </div>
         </div>
-        <div class="progress-status">
-          <span id="progress-status">Initializing PaddleOCR engine...</span>
-          <span id="progress-state-label" style="color: var(--primary);">Processing</span>
+
+        <!-- Title & subtitle -->
+        <div class="conv-title">Converting your PDF</div>
+        <div id="conv-subtitle" class="conv-subtitle">Preparing your document…</div>
+
+        <!-- Progress bar -->
+        <div class="conv-progress-wrap">
+          <div class="conv-progress-bar">
+            <div id="conv-progress-fill" class="conv-progress-fill"></div>
+          </div>
+          <div class="conv-progress-labels">
+            <span id="conv-stage-text">Starting…</span>
+            <span id="conv-pct-text" class="conv-pct">0%</span>
+          </div>
+        </div>
+
+        <!-- Shimmer dots loader -->
+        <div class="conv-dots">
+          <span></span><span></span><span></span>
         </div>
       </div>
+
+      <!-- ── SUCCESS CARD ── -->
+      <div id="success-card" class="result-card success-card" style="display:none;">
+        <div class="result-icon success-icon">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+            <circle cx="20" cy="20" r="20" fill="#D1FAE5"/>
+            <path class="check-path" d="M11 20l6 6 12-12" stroke="#10B981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="result-title">Conversion Complete!</div>
+        <div class="result-sub" id="success-meta">Your Excel file is ready.</div>
+      </div>
+
+      <!-- ── ERROR CARD ── -->
+      <div id="error-card" class="result-card error-card" style="display:none;">
+        <div class="result-icon error-icon">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+            <circle cx="20" cy="20" r="20" fill="#FEE2E2"/>
+            <path d="M20 13v8M20 26v1" stroke="#EF4444" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="result-title">Conversion Failed</div>
+        <div class="result-sub" id="error-msg">We couldn't convert your PDF.</div>
+        <button id="try-again-btn" class="btn btn-primary" style="margin-top:1.25rem;">↺ Try Again</button>
+      </div>
+
     </section>
 
     <!-- INTERACTIVE SPREADSHEET REVIEW SECTION -->
@@ -165,64 +262,46 @@
       </div>
     </section>
 
-    <!-- SECTION: HOW IT WORKS -->
-    <section id="how-it-works" style="margin-top: 5rem; text-align: center;">
-      <h2 style="font-size: 2rem; font-weight: 700; margin-bottom: 1rem;">How It Works</h2>
-      <p style="color: var(--text-muted); max-width: 600px; margin: 0 auto 3rem auto;">Our backend document engine processes complex tables in four automated steps.</p>
-
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 2rem;">
-        <div style="background: var(--bg-card); padding: 2rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); text-align: left;">
-          <div style="font-size: 1.5rem; font-weight: 800; color: var(--primary); margin-bottom: 0.5rem;">01</div>
-          <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem;">PDF Rendering & Orientation</h3>
-          <p style="color: var(--text-muted); font-size: 0.9rem;">PyMuPDF renders PDF pages to 300 DPI high-res images and automatically detects 0°, 90°, 180°, or 270° rotation.</p>
-        </div>
-
-        <div style="background: var(--bg-card); padding: 2rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); text-align: left;">
-          <div style="font-size: 1.5rem; font-weight: 800; color: var(--primary); margin-bottom: 0.5rem;">02</div>
-          <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem;">Preprocessing & PaddleOCR</h3>
-          <p style="color: var(--text-muted); font-size: 0.9rem;">CLAHE contrast enhancement sharpens text and preserves table lines before extracting precise text bounding boxes.</p>
-        </div>
-
-        <div style="background: var(--bg-card); padding: 2rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); text-align: left;">
-          <div style="font-size: 1.5rem; font-weight: 800; color: var(--primary); margin-bottom: 0.5rem;">03</div>
-          <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem;">Hybrid Cell Reconstruction</h3>
-          <p style="color: var(--text-muted); font-size: 0.9rem;">Spatial geometry groups text into logical rows and columns, merging names, dates, and order numbers into single cells.</p>
-        </div>
-
-        <div style="background: var(--bg-card); padding: 2rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); text-align: left;">
-          <div style="font-size: 1.5rem; font-weight: 800; color: var(--primary); margin-bottom: 0.5rem;">04</div>
-          <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem;">Interactive Review & XLSX</h3>
-          <p style="color: var(--text-muted); font-size: 0.9rem;">Review and edit extracted values directly in the browser spreadsheet before downloading a formatted OpenPyXL spreadsheet.</p>
-        </div>
-      </div>
-    </section>
-
     <!-- SECTION: FEATURES -->
     <section id="features" style="margin-top: 5rem;">
       <h2 style="font-size: 2rem; font-weight: 700; text-align: center; margin-bottom: 1rem;">Key Features</h2>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-top: 2.5rem;">
-        <div style="background: var(--bg-card); padding: 1.75rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-          <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem;">🔄 Rotated Table Auto-Correction</h3>
-          <p style="color: var(--text-muted); font-size: 0.9rem;">Handles sideways 90-degree and upside-down scanned reports effortlessly before running character recognition.</p>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; margin-top: 2.5rem;">
+        <div class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <h3>Rotated Table Auto-Correction</h3>
+          <p>Handles sideways 90° and upside-down scanned reports effortlessly before running character recognition.</p>
         </div>
-
-        <div style="background: var(--bg-card); padding: 1.75rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-          <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem;">📑 Multi-Page Header Merging</h3>
-          <p style="color: var(--text-muted); font-size: 0.9rem;">Processes multi-page reports into a single consolidated table, automatically stripping repeated page headers.</p>
+        <div class="feature-card">
+          <div class="feature-icon">📑</div>
+          <h3>Multi-Page Header Merging</h3>
+          <p>Processes multi-page reports into a single consolidated table, automatically stripping repeated page headers.</p>
         </div>
-
-        <div style="background: var(--bg-card); padding: 1.75rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-          <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem;">🔢 ID Leading Zero Preservation</h3>
-          <p style="color: var(--text-muted); font-size: 0.9rem;">Patient IDs, Order Numbers, and Visit Numbers are explicitly formatted as text to prevent Excel digit truncation.</p>
+        <div class="feature-card">
+          <div class="feature-icon">🔢</div>
+          <h3>ID Leading Zero Preservation</h3>
+          <p>Patient IDs, Order Numbers, and Visit Numbers are explicitly formatted as text to prevent Excel digit truncation.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">✏️</div>
+          <h3>Interactive Spreadsheet Review</h3>
+          <p>Review and edit extracted values directly in the browser spreadsheet before downloading your formatted XLSX file.</p>
         </div>
       </div>
     </section>
 
     <!-- SECTION: PRIVACY -->
     <section id="privacy" style="margin-top: 5rem; background: var(--bg-card); padding: 3rem; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
-      <h2 style="font-size: 1.75rem; font-weight: 700; margin-bottom: 1rem;">🔒 Enterprise Privacy & Zero Data Retention</h2>
+      <h2 style="font-size: 1.75rem; font-weight: 700; margin-bottom: 1rem;">🔒 Enterprise Privacy &amp; Zero Data Retention</h2>
       <p style="color: var(--text-muted); line-height: 1.7;">
         Uploaded PDF documents are processed strictly on your application server backend. Intermediate rendered page images, temporary OCR artifacts, and temporary uploaded PDF files are automatically deleted after conversion and download.
+      </p>
+    </section>
+
+    <!-- SECTION: ABOUT -->
+    <section id="about" style="margin-top: 4rem; text-align:center; padding-bottom: 2rem;">
+      <h2 style="font-size: 1.75rem; font-weight: 700; margin-bottom: 1rem;">About</h2>
+      <p style="color: var(--text-muted); max-width: 640px; margin: 0 auto; line-height: 1.7;">
+        PDF to Excel is a production-quality full-stack application that uses PyMuPDF, PaddleOCR, and OpenPyXL to extract structured data from rotated, scanned, and image-based PDF reports — converting them into properly formatted Excel spreadsheets.
       </p>
     </section>
 
@@ -233,8 +312,8 @@
     <div class="nav-container" style="justify-content: space-between;">
       <p>© 2026 PDF to Excel Table Extraction System. All rights reserved.</p>
       <div style="display: flex; gap: 1.5rem;">
-        <a href="#" style="color: var(--text-muted); text-decoration: none;">Privacy Policy</a>
-        <a href="#" style="color: var(--text-muted); text-decoration: none;">Terms of Service</a>
+        <a href="#privacy" style="color: var(--text-muted); text-decoration: none;">Privacy Policy</a>
+        <a href="#about" style="color: var(--text-muted); text-decoration: none;">About</a>
       </div>
     </div>
   </footer>
@@ -243,10 +322,10 @@
   <div class="toast-container"></div>
 
   <!-- JavaScript Modules -->
-  <script src="js/ui.js?v=2"></script>
-  <script src="js/upload.js?v=2"></script>
-  <script src="js/preview.js?v=2"></script>
-  <script src="js/app.js?v=2"></script>
+  <script src="js/ui.js?v=3"></script>
+  <script src="js/upload.js?v=3"></script>
+  <script src="js/preview.js?v=3"></script>
+  <script src="js/app.js?v=3"></script>
 
 </body>
 </html>

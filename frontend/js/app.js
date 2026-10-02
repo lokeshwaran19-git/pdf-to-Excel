@@ -10,7 +10,7 @@ const RENDER_BACKEND_URL = 'https://pdf-to-excel-n2h0.onrender.com';
 // Auto-detect:
 // - On Render (onrender.com): use same-origin (empty string)
 // - On localhost / 127.0.0.1: use same-origin (empty string) — local FastAPI serves frontend
-// - Any other remote host: use Render backend URL
+// - Any other remote host (e.g. Cloudflare Workers): use Render backend URL
 const _host = window.location.hostname;
 const API_BASE_URL = (_host === 'localhost' || _host === '127.0.0.1' || _host.includes('onrender.com'))
   ? ''
@@ -20,7 +20,7 @@ const API_BASE_URL = (_host === 'localhost' || _host === '127.0.0.1' || _host.in
 document.addEventListener('DOMContentLoaded', () => {
   console.log('PDF to Excel SaaS Application Initialized.');
 
-  // Smooth scroll for nav links
+  // ── Smooth scroll for anchor nav links ──────────────────
   document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
       e.preventDefault();
@@ -31,16 +31,35 @@ document.addEventListener('DOMContentLoaded', () => {
       if (targetEl) {
         targetEl.scrollIntoView({ behavior: 'smooth' });
       }
+
+      // Close mobile nav if open
+      const mobileNav = document.getElementById('mobile-nav');
+      if (mobileNav) mobileNav.classList.remove('open');
     });
   });
 
-  // Convert PDF button in header
+  // ── Convert PDF button in header → scroll to upload ─────
   const convertHeaderBtn = document.getElementById('convert-header-btn');
   if (convertHeaderBtn) {
     convertHeaderBtn.addEventListener('click', () => {
       const uploadCard = document.getElementById('upload-section');
-      if (uploadCard) {
-        uploadCard.scrollIntoView({ behavior: 'smooth' });
+      if (uploadCard) uploadCard.scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+
+  // ── Hamburger mobile menu toggle ─────────────────────────
+  const hamburgerBtn = document.getElementById('hamburger-btn');
+  const mobileNav    = document.getElementById('mobile-nav');
+
+  if (hamburgerBtn && mobileNav) {
+    hamburgerBtn.addEventListener('click', () => {
+      mobileNav.classList.toggle('open');
+    });
+
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+      if (!hamburgerBtn.contains(e.target) && !mobileNav.contains(e.target)) {
+        mobileNav.classList.remove('open');
       }
     });
   }
