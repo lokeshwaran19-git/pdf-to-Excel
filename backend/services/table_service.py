@@ -1,7 +1,7 @@
 import gc
 import numpy as np
 from typing import List, Dict, Any, Tuple, Optional
-from backend.utils.image_utils import detect_orientation, rotate_image, preprocess_image
+from backend.utils.image_utils import detect_orientation, detect_orientation_and_ocr, rotate_image, preprocess_image
 from backend.utils.text_utils import clean_text, format_column_header, is_low_confidence
 
 class TableService:
@@ -21,6 +21,7 @@ class TableService:
         self.ocr_service = ocr_service
         self.row_distance_multiplier = row_distance_multiplier
         self.master_col_bounds = None
+        self.document_orientation = None
 
     def extract_tables_from_pdf_pages(self, page_images: List[np.ndarray]) -> Dict[str, Any]:
         """
@@ -39,16 +40,19 @@ class TableService:
         all_cell_low_conf = []
         debug_info = []
 
+        self.document_orientation = None
         for page_num, raw_img in enumerate(page_images, start=1):
-            # 1. Orientation check: Ensures text is horizontal (width >> height)
-            angle, rot_flag = detect_orientation(raw_img, self.ocr_service)
+            # 1. Fast Orientation check & single-pass OCR (reuses precomputed OCR items)
+            angle, rot_flag, ocr_items = detect_orientation_and_ocr(
+                raw_img, self.ocr_service, preferred_angle=self.document_orientation
+            )
+            if self.document_orientation is None:
+                self.document_orientation = angle
+
             if angle != 0:
                 rotated_img = rotate_image(raw_img, angle)
             else:
                 rotated_img = raw_img.copy()
-
-            processed_img = preprocess_image(rotated_img)
-            ocr_items = self.ocr_service.run_ocr(processed_img)
 
             img_h, img_w = rotated_img.shape[:2]
 
@@ -114,7 +118,7 @@ class TableService:
                 "rotated_shape": [img_w, img_h]
             })
 
-            del processed_img, rotated_img
+            del rotated_img, ocr_items
             gc.collect()
 
         # Calculate overall quality metrics
@@ -170,7 +174,7 @@ class TableService:
                     break
 
         if not candidate_items:
-            return 175.0, 160.0, 190.0, [], {}
+            return 50.0, 40.0, 60.0, [], {}
 
         # Group candidate items that share vertical alignment
         candidate_items.sort(key=lambda x: x[1]['center_y'])
@@ -188,6 +192,10 @@ class TableService:
 
         # Select the cluster containing the most unique column matches
         best_cluster = max(clusters, key=lambda cl: len(set(x[0] for x in cl)))
+        unique_matches = len(set(x[0] for x in best_cluster))
+        if unique_matches < 3:
+            # Not a true table header row (e.g. isolated stray keyword)
+            return 50.0, 40.0, 60.0, [], {}
         header_items = [x[1] for x in best_cluster]
 
         header_top = min(it['bbox'][1] for it in header_items)

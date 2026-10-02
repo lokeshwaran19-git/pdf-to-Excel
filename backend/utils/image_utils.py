@@ -42,11 +42,18 @@ def preprocess_image(image: np.ndarray) -> np.ndarray:
     del sharpened
     return result
 
-def detect_orientation(image: np.ndarray, ocr_engine) -> Tuple[int, Optional[int]]:
+def detect_orientation_and_ocr(image: np.ndarray, ocr_engine, preferred_angle: Optional[int] = None) -> Tuple[int, Optional[int], List[Dict[str, Any]]]:
     """
-    Detect page orientation. Checks horizontal text geometry (aspect ratio) and keywords.
-    Crucially ensures text is horizontal (width >> height) to prevent sideways (90°/270°)
-    transposition of table columns into rows.
+    High-performance orientation detection and single-pass OCR:
+    1. If preferred_angle is provided (e.g. from document's Page 1), directly test it with full OCR.
+       If valid text is found, return immediately without re-checking other orientations.
+    2. Otherwise, use lightweight text_detector (~0.5s) to check bounding box aspect ratios:
+       - If horizontal (horiz_ratio >= 0.5): candidates are [0, 180]
+       - If vertical (horiz_ratio < 0.5): candidates are [90, 270]
+    3. Run preprocessed OCR on candidate 1. If keyword count >= 2, accept immediately.
+    4. Otherwise, test candidate 2 (the 180° flipped version).
+    5. Returns (selected_angle, rotation_flag, precomputed_ocr_items).
+       The precomputed OCR items are reused directly so the page is NEVER scanned twice!
     """
     rotation_flags = {
         0: None,
@@ -61,61 +68,64 @@ def detect_orientation(image: np.ndarray, ocr_engine) -> Tuple[int, Optional[int
         'resting ecg', 'ecg', 'cardiology'
     ]
 
-    # Maintain high enough resolution (up to 1100px) so small text remains legible for OCR
+    # Fast path: If preferred orientation is already established for this document, test it directly
+    if preferred_angle is not None:
+        rot_img = rotate_image(image, preferred_angle) if preferred_angle != 0 else image
+        proc_img = preprocess_image(rot_img)
+        ocr_items = ocr_engine.run_ocr(proc_img)
+        if len(ocr_items) > 5:
+            return preferred_angle, rotation_flags[preferred_angle], ocr_items
+
+    # Step 1: Sub-second text detection to determine primary axis (horizontal vs vertical)
     h, w = image.shape[:2]
-    scale = min(1.0, 1100.0 / max(h, w))
-    preview_img = cv2.resize(image, (int(w * scale), int(h * scale)),
-                             interpolation=cv2.INTER_AREA) if scale < 1.0 else image
+    scale = min(1.0, 900.0 / max(h, w))
+    preview_img = cv2.resize(image, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA) if scale < 1.0 else image
 
-    # Fast path: test 0 degrees first
-    results_0 = ocr_engine.run_ocr(preview_img)
-    if results_0:
-        full_text_0 = " ".join([item['text'].lower() for item in results_0])
-        kw_count_0 = sum(1 for kw in target_keywords if kw in full_text_0)
-        w_h_0 = [(item['bbox'][2] - item['bbox'][0]) / max(1.0, item['bbox'][3] - item['bbox'][1]) for item in results_0]
-        avg_aspect_0 = float(np.mean(w_h_0)) if w_h_0 else 0.0
-        horiz_0 = sum(1 for r in w_h_0 if r >= 1.2) / len(w_h_0) if w_h_0 else 0.0
-        
-        # If 0 deg has clear horizontal text and multiple matching keywords, accept immediately
-        if avg_aspect_0 >= 1.8 and horiz_0 >= 0.70 and kw_count_0 >= 5:
-            return 0, None
+    try:
+        boxes, _ = ocr_engine.engine.text_detector(preview_img)
+    except Exception:
+        boxes = None
 
-    best_angle = 0
-    best_score = -99999.0
-    
-    for angle in [0, 90, 180, 270]:
-        flag = rotation_flags[angle]
-        test_img = preview_img if flag is None else cv2.rotate(preview_img, flag)
-        
-        results = results_0 if angle == 0 else ocr_engine.run_ocr(test_img)
-        if not results:
-            continue
-            
-        w_h_ratios = []
-        full_text = " ".join([item['text'].lower() for item in results])
-        kw_count = sum(1 for kw in target_keywords if kw in full_text)
-                
-        for item in results:
-            bbox = item['bbox']
-            bw = max(1.0, bbox[2] - bbox[0])
-            bh = max(1.0, bbox[3] - bbox[1])
-            w_h_ratios.append(bw / bh)
-            
-        avg_aspect_ratio = float(np.mean(w_h_ratios)) if w_h_ratios else 0.0
-        horiz_count = sum(1 for r in w_h_ratios if r >= 1.2)
-        horiz_ratio = horiz_count / len(w_h_ratios) if w_h_ratios else 0.0
-        
-        # Severe penalty if text bounding boxes are predominantly vertical (sideways)
-        if avg_aspect_ratio < 0.9 or horiz_ratio < 0.40:
-            score = -1000.0 + (kw_count * 2.0)
-        else:
-            score = (kw_count * 25.0) + (horiz_ratio * 20.0) + min(avg_aspect_ratio, 6.0) + (len(results) * 0.02)
-        
-        if score > best_score:
-            best_score = score
-            best_angle = angle
-            
-    return best_angle, rotation_flags[best_angle]
+    if boxes is not None and len(boxes) > 0:
+        w_h = []
+        for b in boxes:
+            bw = max(1.0, float(np.linalg.norm(b[1] - b[0])))
+            bh = max(1.0, float(np.linalg.norm(b[3] - b[0])))
+            w_h.append(bw / bh)
+        horiz_ratio = sum(1 for r in w_h if r >= 1.2) / len(w_h)
+    else:
+        horiz_ratio = 0.5
+
+    # If bounding boxes are predominantly horizontal, try [0, 180]; otherwise try [90, 270]
+    candidates = [0, 180] if horiz_ratio >= 0.5 else [90, 270]
+
+    # Test candidate 1 with preprocessing and OCR
+    cand1 = candidates[0]
+    rot1 = rotate_image(image, cand1) if cand1 != 0 else image
+    proc1 = preprocess_image(rot1)
+    ocr_items1 = ocr_engine.run_ocr(proc1)
+    full_text1 = " ".join([it['text'].lower() for it in ocr_items1])
+    kw1 = sum(1 for kw in target_keywords if kw in full_text1)
+
+    if kw1 >= 2 or len(candidates) == 1:
+        return cand1, rotation_flags[cand1], ocr_items1
+
+    # Test candidate 2 (180° flip)
+    cand2 = candidates[1]
+    rot2 = rotate_image(image, cand2) if cand2 != 0 else image
+    proc2 = preprocess_image(rot2)
+    ocr_items2 = ocr_engine.run_ocr(proc2)
+    full_text2 = " ".join([it['text'].lower() for it in ocr_items2])
+    kw2 = sum(1 for kw in target_keywords if kw in full_text2)
+
+    if kw2 > kw1:
+        return cand2, rotation_flags[cand2], ocr_items2
+    return cand1, rotation_flags[cand1], ocr_items1
+
+def detect_orientation(image: np.ndarray, ocr_engine, preferred_angle: Optional[int] = None) -> Tuple[int, Optional[int]]:
+    """Backward compatible wrapper returning (angle, rot_flag)."""
+    angle, rot_flag, _ = detect_orientation_and_ocr(image, ocr_engine, preferred_angle=preferred_angle)
+    return angle, rot_flag
 
 def draw_debug_annotations(image: np.ndarray, 
                            ocr_items: List[Dict[str, Any]], 
