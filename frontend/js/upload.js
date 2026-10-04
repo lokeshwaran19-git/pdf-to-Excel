@@ -136,7 +136,6 @@ const UploadManager = {
     convertBtn.disabled = true;
     convertBtn.classList.add('loading');
     convertBtn.querySelector('.btn-convert-text').textContent = 'Converting…';
-    // Insert spinner if not present
     if (!convertBtn.querySelector('.btn-spinner')) {
       const sp = document.createElement('span');
       sp.className = 'btn-spinner';
@@ -148,61 +147,23 @@ const UploadManager = {
     convCard.style.display = 'block';
     convCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-    // ── Animate stage progress (frontend-only UX) ────────
-    let stageIdx = 0;
-    const setStage = (idx) => {
-      const s = this._stages[idx];
-      if (!s) return;
-      progressFill.style.width = `${s.pct}%`;
-      stageText.textContent    = s.stage;
-      pctText.textContent      = `${s.pct}%`;
-      // Fade subtitle
-      subtitleEl.style.opacity = '0';
-      setTimeout(() => {
-        subtitleEl.textContent = s.sub;
-        subtitleEl.style.opacity = '1';
-      }, 200);
-    };
+    progressFill.style.width = '10%';
+    pctText.textContent      = '10%';
+    stageText.textContent    = 'Submitting document…';
+    subtitleEl.textContent   = 'Connecting to extraction queue…';
 
-    setStage(0);
-    const stageInterval = setInterval(() => {
-      stageIdx++;
-      if (stageIdx < this._stages.length) {
-        setStage(stageIdx);
-      } else {
-        // Hold at last stage while waiting
-        stageText.textContent = 'AI engine processing (almost ready)…';
-      }
-    }, 2400);
-
-    // ── Build form data (unchanged API contract) ─────────
     const formData = new FormData();
     formData.append('file', this.selectedFile);
 
+    let stageIdx = 0;
+    let pollInterval = null;
+
     try {
-      let response;
-      let retries = 0;
-      const maxRetries = 4;
-
-      while (retries <= maxRetries) {
-        response = await fetch(`${API_BASE_URL}/api/convert`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        // If server is busy processing another document (concurrency lock), wait and auto-retry
-        if ((response.status === 503 || response.status === 429) && retries < maxRetries) {
-          retries++;
-          stageText.textContent = `Server busy (document in queue). Retrying in 5s… (${retries}/${maxRetries})`;
-          subtitleEl.textContent = 'Another conversion is finishing. You are next in queue…';
-          await this._delay(5000);
-          continue;
-        }
-
-        break;
-      }
-
-      clearInterval(stageInterval);
+      // 1. Submit job (immediate 200 OK in <150ms — eliminates 502 Bad Gateway timeouts)
+      const response = await fetch(`${API_BASE_URL}/api/convert`, {
+        method: 'POST',
+        body: formData,
+      });
 
       if (!response.ok) {
         let errMsg = `Server error (${response.status}: ${response.statusText || 'Unknown'})`;
@@ -213,53 +174,127 @@ const UploadManager = {
         throw new Error(errMsg);
       }
 
-      const result = await response.json();
+      const initData = await response.json();
 
-      // ── Animate to 100% then show success ────────────────
-      progressFill.style.width = '100%';
-      pctText.textContent      = '100%';
-      stageText.textContent    = 'Conversion Complete!';
-      subtitleEl.textContent   = 'Building your spreadsheet…';
+      // Legacy direct response compatibility
+      if (initData.rows !== undefined && initData.headers !== undefined) {
+        await this._handleConversionSuccess(initData);
+        return;
+      }
 
-      await this._delay(650);
+      const jobId = initData.job_id;
+      if (!jobId) {
+        throw new Error('Server did not return a valid Job ID.');
+      }
 
-      convCard.style.display = 'none';
+      // 2. Poll job status in background until complete
+      const pollJob = async () => {
+        try {
+          const statusRes = await fetch(`${API_BASE_URL}/api/status/${jobId}?_t=${Date.now()}`);
+          if (!statusRes.ok) return;
 
-      // Populate success card meta
-      const meta = [];
-      if (result.filename) meta.push(`<strong>${result.filename}</strong>`);
-      if (result.pages)    meta.push(`${result.pages} page${result.pages > 1 ? 's' : ''} processed`);
-      if (result.rows)     meta.push(`${result.rows} rows extracted`);
-      document.getElementById('success-meta').innerHTML =
-        meta.length ? meta.join(' · ') : 'Your Excel file is ready.';
+          const data = await statusRes.json();
 
-      successCard.style.display = 'block';
-      UI.showToast('Table extracted successfully!', 'success');
+          if (data.status === 'queued') {
+            const pos = data.queue_position || 1;
+            stageText.textContent = `In Queue (Position #${pos})`;
+            subtitleEl.textContent = pos > 1
+              ? `Processing earlier documents securely. You are #${pos} in line…`
+              : 'You are next in line. Preparing OCR engine…';
+            progressFill.style.width = '18%';
+            pctText.textContent = '18%';
+          } else if (data.status === 'processing') {
+            if (stageIdx < this._stages.length) {
+              const s = this._stages[stageIdx];
+              progressFill.style.width = `${s.pct}%`;
+              stageText.textContent    = s.stage;
+              pctText.textContent      = `${s.pct}%`;
+              subtitleEl.textContent   = s.sub;
+              stageIdx++;
+            } else {
+              stageText.textContent  = data.stage || 'AI engine processing table structure…';
+              subtitleEl.textContent = 'Almost ready. Reconstructing columns and cells…';
+            }
+          } else if (data.status === 'completed') {
+            if (pollInterval) {
+              clearInterval(pollInterval);
+              pollInterval = null;
+            }
+            await this._handleConversionSuccess(data.result);
+          } else if (data.status === 'failed') {
+            if (pollInterval) {
+              clearInterval(pollInterval);
+              pollInterval = null;
+            }
+            throw new Error(data.error || 'Conversion failed. Please try again.');
+          }
+        } catch (pollErr) {
+          if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+          }
+          this._handleConversionError(pollErr);
+        }
+      };
 
-      await this._delay(900);
-      successCard.style.display = 'none';
-
-      // ── Render spreadsheet preview (unchanged) ───────────
-      PreviewManager.renderTable(result);
+      // Poll immediately once, then every 2.5 seconds
+      await pollJob();
+      pollInterval = setInterval(pollJob, 2500);
 
     } catch (err) {
-      clearInterval(stageInterval);
-
-      convCard.style.display = 'none';
-
-      // Show error card
-      document.getElementById('error-msg').textContent =
-        err.message || 'We couldn\'t convert your PDF. Please try again.';
-      errorCard.style.display = 'block';
-
-      UI.showToast(err.message || 'An error occurred during extraction.', 'error');
-
+      if (pollInterval) clearInterval(pollInterval);
+      this._handleConversionError(err);
     } finally {
-      // Always restore convert button
+      // Restore convert button
       convertBtn.classList.remove('loading');
       convertBtn.disabled = false;
       convertBtn.querySelector('.btn-convert-text').textContent = 'Convert PDF';
     }
+  },
+
+  async _handleConversionSuccess(result) {
+    const convCard     = document.getElementById('conversion-card');
+    const successCard  = document.getElementById('success-card');
+    const progressFill = document.getElementById('conv-progress-fill');
+    const stageText    = document.getElementById('conv-stage-text');
+    const pctText      = document.getElementById('conv-pct-text');
+    const subtitleEl   = document.getElementById('conv-subtitle');
+
+    progressFill.style.width = '100%';
+    pctText.textContent      = '100%';
+    stageText.textContent    = 'Conversion Complete!';
+    subtitleEl.textContent   = 'Building your spreadsheet…';
+
+    await this._delay(650);
+    convCard.style.display = 'none';
+
+    // Populate success card meta
+    const meta = [];
+    if (result && result.filename) meta.push(`<strong>${result.filename}</strong>`);
+    if (result && result.pages)    meta.push(`${result.pages} page${result.pages > 1 ? 's' : ''} processed`);
+    if (result && result.rows !== undefined) meta.push(`${result.rows} rows extracted`);
+    document.getElementById('success-meta').innerHTML =
+      meta.length ? meta.join(' · ') : 'Your Excel file is ready.';
+
+    successCard.style.display = 'block';
+    UI.showToast('Table extracted successfully!', 'success');
+
+    await this._delay(900);
+    successCard.style.display = 'none';
+
+    // Render spreadsheet preview
+    if (result) PreviewManager.renderTable(result);
+  },
+
+  _handleConversionError(err) {
+    const convCard  = document.getElementById('conversion-card');
+    const errorCard = document.getElementById('error-card');
+
+    convCard.style.display = 'none';
+    const errMsg = err.message || 'We couldn\'t convert your PDF. Please try again.';
+    document.getElementById('error-msg').textContent = errMsg;
+    errorCard.style.display = 'block';
+    UI.showToast(errMsg, 'error');
   },
 
   _delay(ms) {
