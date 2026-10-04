@@ -5,7 +5,7 @@
 // ─── API Configuration ─────────────────────────────────────────────────────
 // When frontend is served from a different domain (e.g. Cloudflare Workers),
 // set this to your Render backend URL. Leave empty string '' to use same-origin.
-const RENDER_BACKEND_URL = 'https://pdf-to-excel-n2h0.onrender.com';
+const RENDER_BACKEND_URL = 'https://pdf-to-excel-n2ho.onrender.com';
 
 // Auto-detect:
 // - On Render (onrender.com): use same-origin (empty string)
@@ -14,7 +14,7 @@ const RENDER_BACKEND_URL = 'https://pdf-to-excel-n2h0.onrender.com';
 const _host = window.location.hostname;
 const API_BASE_URL = (_host === 'localhost' || _host === '127.0.0.1' || _host.includes('onrender.com'))
   ? ''
-  : RENDER_BACKEND_URL;
+  : RENDER_BACKEND_URL.replace(/\/+$/, '');
 // ───────────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -10,6 +10,8 @@ import gc
 import uuid
 import shutil
 import tempfile
+import asyncio
+import time
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
@@ -27,9 +29,9 @@ import cv2
 app = FastAPI(title="PDF to Excel Extraction API", version="1.0.0")
 
 # ── Allowed CORS origins ────────────────────────────────────────────────────
-# Production Cloudflare Workers frontend + local development origins.
 ALLOWED_ORIGINS = [
     "https://pdf-to-excel.lokeshlap2828.workers.dev",
+    "https://pdf-to-excel-n2ho.onrender.com",
     "http://localhost:3000",
     "http://localhost:5173",
     "http://localhost:8000",
@@ -40,18 +42,29 @@ ALLOWED_ORIGINS = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
 
+# ── Prevent stale browser caching of frontend static assets ────────────────
+@app.middleware("http")
+async def add_cache_control_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/app") or path.endswith((".html", ".js", ".css")):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 # ── Custom exception handlers to ensure CORS headers survive error responses ──
 def _get_cors_headers(request: Request) -> dict:
-    """Return CORS headers matching the request's origin, if allowed."""
-    origin = request.headers.get("origin", "")
-    allowed_origin = origin if origin in ALLOWED_ORIGINS else (ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*")
+    """Return CORS headers matching the request's origin."""
+    origin = request.headers.get("origin")
+    allowed_origin = origin if origin else "*"
     return {
         "Access-Control-Allow-Origin": allowed_origin,
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -86,8 +99,12 @@ def startup_event():
         print(f"Error pre-loading OCR engine: {e}")
 
 # Global in-memory storage for active jobs (store intermediate table data for editing/download)
-# Job directory stores output xlsx files securely, deleted upon download or after expiry
+# Bounded to max 12 items to prevent memory buildup on Render's 512MB RAM tier
 JOBS_CACHE: Dict[str, Dict[str, Any]] = {}
+
+# Concurrency semaphore: strictly allow ONLY ONE PDF conversion at a time.
+# Running concurrent ONNX OCR inferences blows past 512MB RAM and kills the process (502 Bad Gateway).
+CONVERSION_SEMAPHORE = asyncio.Semaphore(1)
 
 # Ensure working temp directories exist
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -111,6 +128,29 @@ def cleanup_file(filepath: str):
     except Exception as e:
         print(f"Error cleaning up file {filepath}: {e}")
 
+def _cleanup_old_files():
+    """Remove files older than 30 minutes from uploads and outputs."""
+    now = time.time()
+    for directory in [UPLOADS_DIR, OUTPUTS_DIR]:
+        try:
+            for fname in os.listdir(directory):
+                fpath = os.path.join(directory, fname)
+                if os.path.isfile(fpath) and (now - os.path.getmtime(fpath) > 1800):
+                    try:
+                        os.remove(fpath)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+def _evict_oldest_jobs(max_jobs: int = 12):
+    """Keep JOBS_CACHE bounded in memory to prevent memory leaks."""
+    while len(JOBS_CACHE) > max_jobs:
+        oldest_job_id = next(iter(JOBS_CACHE))
+        old_job = JOBS_CACHE.pop(oldest_job_id, None)
+        if old_job and "excel_path" in old_job:
+            cleanup_file(old_job["excel_path"])
+
 @app.get("/")
 def root():
     """Redirect root to frontend application."""
@@ -121,42 +161,23 @@ def health_check():
     """Health check endpoint."""
     return {"status": "ok"}
 
-@app.post("/api/convert")
-def convert_pdf_to_excel(file: UploadFile = File(...)):
-    """
-    Core Conversion Endpoint:
-    Upload PDF -> Render Pages -> Detect Rotation -> Run PaddleOCR -> Detect Table ->
-    Reconstruct Rows/Cols/Cells -> Generate Excel -> Cache Job Data -> Return JSON.
-    """
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Uploaded file must be a PDF document.")
-
-    job_id = str(uuid.uuid4())
-    temp_pdf_path = os.path.join(UPLOADS_DIR, f"{job_id}_{file.filename}")
-
+def _run_conversion_sync(pdf_bytes: bytes, filename: str, job_id: str, temp_pdf_path: str):
+    """Synchronous CPU/memory intensive conversion task."""
+    gc.collect()
     try:
-        # 1. Read PDF file contents into memory & save temporary file
-        pdf_bytes = file.file.read()
+        # 1. Save temporary PDF
         with open(temp_pdf_path, "wb") as f:
             f.write(pdf_bytes)
 
         # 2. Render PDF pages to high-resolution images
-        # DPI 96 balances OCR accuracy vs. memory usage on constrained hosts (Render free tier ~512MB).
-        # At DPI 130 a typical A4 landscape page = ~1700×1300×3 bytes ≈ 6.6 MB per page in RAM.
-        # At DPI 96 the same page ≈ ~1200×930×3 bytes ≈ 3.4 MB — a 48% saving.
         page_images = PDFService.render_pdf_to_images(pdf_bytes, dpi=96)
-
-        # Free raw PDF bytes from memory immediately after rendering;
-        # only the NumPy image arrays are needed hereafter.
         del pdf_bytes
         gc.collect()
 
         page_count = len(page_images)
-
         if page_count == 0:
             raise HTTPException(status_code=400, detail="PDF contains no renderable pages.")
 
-        # Guard against excessively large PDFs that would OOM the server
         MAX_PAGES = 10
         if page_count > MAX_PAGES:
             raise HTTPException(
@@ -176,18 +197,18 @@ def convert_pdf_to_excel(file: UploadFile = File(...)):
         low_conf_cells = extraction_result["low_conf_cells"]
 
         # 5. Generate Excel File using OpenPyXL
-        out_filename = f"{os.path.splitext(file.filename)[0]}-converted.xlsx"
+        out_filename = f"{os.path.splitext(filename)[0]}-converted.xlsx"
         excel_path = os.path.join(OUTPUTS_DIR, f"{job_id}_{out_filename}")
-
         ExcelService.create_excel_file(headers, table_data, excel_path)
 
-        # 6. Cache job details for download & edit export
-        # Free large image arrays from memory before caching
+        # Free image arrays immediately before caching
         del page_images
         gc.collect()
 
+        # Cache job details with bounded memory
+        _evict_oldest_jobs(12)
         JOBS_CACHE[job_id] = {
-            "filename": file.filename,
+            "filename": filename,
             "out_filename": out_filename,
             "excel_path": excel_path,
             "headers": headers,
@@ -196,13 +217,12 @@ def convert_pdf_to_excel(file: UploadFile = File(...)):
             "debug_info": extraction_result.get("debug_info", [])
         }
 
-        # 7. Securely delete temporary PDF file
         cleanup_file(temp_pdf_path)
 
         return {
             "success": True,
             "job_id": job_id,
-            "filename": file.filename,
+            "filename": filename,
             "pages": page_count,
             "rows": len(table_data),
             "columns": len(headers),
@@ -214,11 +234,48 @@ def convert_pdf_to_excel(file: UploadFile = File(...)):
             "low_conf_cells": low_conf_cells,
             "download_url": f"/api/download/{job_id}"
         }
-
+    except HTTPException:
+        cleanup_file(temp_pdf_path)
+        raise
     except Exception as e:
         cleanup_file(temp_pdf_path)
         print(f"Error during PDF conversion: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Table extraction failed: {str(e)}")
+    finally:
+        gc.collect()
+
+@app.post("/api/convert")
+async def convert_pdf_to_excel(file: UploadFile = File(...)):
+    """
+    Core Conversion Endpoint protected by concurrency semaphore:
+    Only 1 conversion runs at a time to prevent 502 / OOM crashes on Render.
+    Offloaded to thread pool so the async event loop stays completely responsive.
+    """
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Uploaded file must be a PDF document.")
+
+    # If another conversion is already running, wait up to 15s or return 503 so frontend retries smoothly
+    try:
+        await asyncio.wait_for(CONVERSION_SEMAPHORE.acquire(), timeout=15.0)
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=503,
+            detail="Server is currently processing another document. Please wait a moment."
+        )
+
+    job_id = str(uuid.uuid4())
+    temp_pdf_path = os.path.join(UPLOADS_DIR, f"{job_id}_{file.filename}")
+
+    try:
+        pdf_bytes = await file.read()
+        _cleanup_old_files()
+
+        # Run CPU-intensive conversion in threadpool so FastAPI event loop remains responsive
+        result = await asyncio.to_thread(_run_conversion_sync, pdf_bytes, file.filename, job_id, temp_pdf_path)
+        return result
+    finally:
+        CONVERSION_SEMAPHORE.release()
+        gc.collect()
 
 class ExportRequest(BaseModel):
     headers: List[str]

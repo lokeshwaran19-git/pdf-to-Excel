@@ -180,11 +180,27 @@ const UploadManager = {
     formData.append('file', this.selectedFile);
 
     try {
-      // ─── SAME API CALL — DO NOT CHANGE ───────────────────
-      const response = await fetch(`${API_BASE_URL}/api/convert`, {
-        method: 'POST',
-        body: formData,
-      });
+      let response;
+      let retries = 0;
+      const maxRetries = 4;
+
+      while (retries <= maxRetries) {
+        response = await fetch(`${API_BASE_URL}/api/convert`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        // If server is busy processing another document (concurrency lock), wait and auto-retry
+        if ((response.status === 503 || response.status === 429) && retries < maxRetries) {
+          retries++;
+          stageText.textContent = `Server busy (document in queue). Retrying in 5s… (${retries}/${maxRetries})`;
+          subtitleEl.textContent = 'Another conversion is finishing. You are next in queue…';
+          await this._delay(5000);
+          continue;
+        }
+
+        break;
+      }
 
       clearInterval(stageInterval);
 
