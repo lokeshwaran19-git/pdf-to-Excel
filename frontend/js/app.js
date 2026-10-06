@@ -73,4 +73,32 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // ── Mode Switcher (Single Table vs Batch Medical) ─────────
+  const tabSingle = document.getElementById('tab-single-mode');
+  const tabBatch  = document.getElementById('tab-batch-mode');
+  const singleContainer = document.getElementById('single-mode-container');
+  const batchContainer  = document.getElementById('batch-mode-container');
+
+  if (tabSingle && tabBatch && singleContainer && batchContainer) {
+    tabSingle.addEventListener('click', () => {
+      tabSingle.classList.add('active');
+      tabSingle.setAttribute('aria-selected', 'true');
+      tabBatch.classList.remove('active');
+      tabBatch.setAttribute('aria-selected', 'false');
+
+      singleContainer.style.display = 'block';
+      batchContainer.style.display  = 'none';
+    });
+
+    tabBatch.addEventListener('click', () => {
+      tabBatch.classList.add('active');
+      tabBatch.setAttribute('aria-selected', 'true');
+      tabSingle.classList.remove('active');
+      tabSingle.setAttribute('aria-selected', 'false');
+
+      batchContainer.style.display  = 'block';
+      singleContainer.style.display = 'none';
+    });
+  }
 });

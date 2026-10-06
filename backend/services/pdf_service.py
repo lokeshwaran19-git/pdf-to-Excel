@@ -43,3 +43,28 @@ class PDFService:
         return {
             "page_count": page_count
         }
+
+    @staticmethod
+    def iter_pdf_pages(pdf_bytes: bytes, dpi: int = 96):
+        """
+        Memory-efficient sequential generator:
+        Yields (page_number, page_image_bgr) one page at a time.
+        Allows the caller to process and release memory for each page
+        before rendering the next page (critical for Render 512MB RAM).
+        """
+        doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+        zoom = dpi / 72.0
+        mat = pymupdf.Matrix(zoom, zoom)
+
+        for idx, page in enumerate(doc, start=1):
+            pix = page.get_pixmap(matrix=mat, alpha=False)
+            img_np = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+                (pix.height, pix.width, 3)
+            ).copy()
+            pix = None  # Release pixmap buffer immediately
+            img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+            del img_np
+            yield idx, img_bgr
+
+        doc.close()
+

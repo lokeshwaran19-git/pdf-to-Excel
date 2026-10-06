@@ -74,47 +74,109 @@
 
     <!-- UPLOAD & PROCESSING SECTION -->
     <section id="upload-section" class="upload-card">
-      <input type="file" id="file-input" accept=".pdf" style="display: none;">
 
-      <div id="drop-zone" class="drop-zone">
-        <div class="drop-icon-wrap">
-          <svg width="44" height="44" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="48" height="48" rx="12" fill="currentColor" fill-opacity="0.08"/>
-            <path d="M14 36V12a2 2 0 0 1 2-2h12l8 8v18a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            <path d="M28 10v8h8" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            <path d="M20 28l4-4 4 4M24 24v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="drop-text">
-          <h3>Drop your PDF file here</h3>
-          <p>or <span class="drop-link">click to browse</span> from your device</p>
-          <span class="drop-hint">Supports PDF files up to 25 MB</span>
+      <!-- Mode Selector Tabs -->
+      <div class="mode-selector-wrap">
+        <div class="mode-tabs" role="tablist">
+          <button class="mode-tab active" id="tab-single-mode" role="tab" aria-selected="true">
+            <span>📄 Single Table Extraction</span>
+          </button>
+          <button class="mode-tab" id="tab-batch-mode" role="tab" aria-selected="false">
+            <span>🏥 Batch Medical Report Extraction</span>
+            <span class="mode-pill">New</span>
+          </button>
         </div>
       </div>
 
-      <!-- File Details Card (Visible after selection) -->
-      <div id="file-card" class="file-card" style="display: none;">
-        <div class="file-info">
-          <div class="file-icon-wrap">
-            <svg width="34" height="34" viewBox="0 0 32 32" fill="none">
-              <rect width="32" height="32" rx="8" fill="#FEE2E2"/>
-              <path d="M9 24V8a1 1 0 0 1 1-1h8l6 6v11a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1z" fill="#EF4444" opacity="0.2" stroke="#EF4444" stroke-width="1.5"/>
-              <path d="M17 7v6h6" stroke="#EF4444" stroke-width="1.5" stroke-linejoin="round"/>
-              <text x="11" y="21" font-family="sans-serif" font-size="6" font-weight="700" fill="#EF4444">PDF</text>
+      <!-- SINGLE PDF EXTRACTION CONTAINER -->
+      <div id="single-mode-container">
+        <input type="file" id="file-input" accept=".pdf" style="display: none;">
+
+        <div id="drop-zone" class="drop-zone">
+          <div class="drop-icon-wrap">
+            <svg width="44" height="44" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="48" height="48" rx="12" fill="currentColor" fill-opacity="0.08"/>
+              <path d="M14 36V12a2 2 0 0 1 2-2h12l8 8v18a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M28 10v8h8" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M20 28l4-4 4 4M24 24v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </div>
-          <div class="file-details">
-            <h4 id="file-name">filename.pdf</h4>
-            <p><span id="file-size">0 MB</span> • PDF Document</p>
+          <div class="drop-text">
+            <h3>Drop your PDF file here</h3>
+            <p>or <span class="drop-link">click to browse</span> from your device</p>
+            <span class="drop-hint">Supports PDF files up to 25 MB</span>
           </div>
         </div>
 
-        <div class="file-actions">
-          <button id="remove-file-btn" class="btn btn-outline-danger">✕ Remove</button>
-          <button id="convert-btn" class="btn btn-convert" disabled>
-            <span class="btn-convert-icon">⚡</span>
-            <span class="btn-convert-text">Convert PDF</span>
-          </button>
+        <!-- File Details Card (Visible after selection) -->
+        <div id="file-card" class="file-card" style="display: none;">
+          <div class="file-info">
+            <div class="file-icon-wrap">
+              <svg width="34" height="34" viewBox="0 0 32 32" fill="none">
+                <rect width="32" height="32" rx="8" fill="#FEE2E2"/>
+                <path d="M9 24V8a1 1 0 0 1 1-1h8l6 6v11a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1z" fill="#EF4444" opacity="0.2" stroke="#EF4444" stroke-width="1.5"/>
+                <path d="M17 7v6h6" stroke="#EF4444" stroke-width="1.5" stroke-linejoin="round"/>
+                <text x="11" y="21" font-family="sans-serif" font-size="6" font-weight="700" fill="#EF4444">PDF</text>
+              </svg>
+            </div>
+            <div class="file-details">
+              <h4 id="file-name">filename.pdf</h4>
+              <p><span id="file-size">0 MB</span> • PDF Document</p>
+            </div>
+          </div>
+
+          <div class="file-actions">
+            <button id="remove-file-btn" class="btn btn-outline-danger">✕ Remove</button>
+            <button id="convert-btn" class="btn btn-convert" disabled>
+              <span class="btn-convert-icon">⚡</span>
+              <span class="btn-convert-text">Convert PDF</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- BATCH MEDICAL REPORT EXTRACTION CONTAINER -->
+      <div id="batch-mode-container" style="display: none;">
+        <div class="batch-header">
+          <h3>Batch Medical Report Extraction</h3>
+          <p class="batch-sub">Upload 1 to 10 medical-report PDFs. Extracts <strong>Patient Information</strong>, <strong>Assessments</strong>, and <strong>Visit Codes</strong> across all pages into ONE combined Excel spreadsheet.</p>
+        </div>
+
+        <input type="file" id="batch-file-input" accept=".pdf" multiple style="display: none;">
+
+        <div id="batch-drop-zone" class="drop-zone">
+          <div class="drop-icon-wrap">
+            <svg width="44" height="44" viewBox="0 0 48 48" fill="none">
+              <rect width="48" height="48" rx="12" fill="currentColor" fill-opacity="0.08"/>
+              <path d="M14 36V12a2 2 0 0 1 2-2h12l8 8v18a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M28 10v8h8" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M20 28l4-4 4 4M24 24v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="drop-text">
+            <h3>Drop up to 10 Medical PDFs here</h3>
+            <p>or <span class="drop-link">click to browse</span> from your device</p>
+            <span class="drop-hint">Upload 1 to 10 PDFs (Max 25 MB each)</span>
+          </div>
+        </div>
+
+        <!-- Selected Batch Files Card -->
+        <div id="batch-file-card" class="batch-file-card" style="display: none;">
+          <div class="batch-files-header">
+            <div class="batch-count-badge">
+              <span id="batch-file-count">0</span> / 10 files selected
+            </div>
+            <button id="batch-remove-all-btn" class="btn btn-outline-danger" style="padding: 0.3rem 0.65rem; font-size: 0.8rem;">✕ Remove All</button>
+          </div>
+
+          <div id="batch-file-list" class="batch-file-list"></div>
+
+          <div class="batch-actions">
+            <button id="batch-convert-btn" class="btn btn-convert" disabled>
+              <span class="btn-convert-icon">⚡</span>
+              <span class="btn-convert-text">Convert All to Excel</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -292,6 +354,7 @@
   <!-- JavaScript Modules -->
   <script src="js/ui.js?v=6"></script>
   <script src="js/upload.js?v=6"></script>
+  <script src="js/batch_upload.js?v=6"></script>
   <script src="js/preview.js?v=6"></script>
   <script src="js/app.js?v=6"></script>
 

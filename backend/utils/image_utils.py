@@ -65,7 +65,8 @@ def detect_orientation_and_ocr(image: np.ndarray, ocr_engine, preferred_angle: O
     target_keywords = [
         'overreader', 'patient id', 'patient full', 'date of birth', 
         'visit number', 'order number', 'acquisition', 'test type', 
-        'resting ecg', 'ecg', 'cardiology'
+        'resting ecg', 'ecg', 'cardiology',
+        'patient', 'dob', 'assessment', 'assessments', 'visit code', 'medical'
     ]
 
     # Fast path: If preferred orientation is already established for this document, test it directly
