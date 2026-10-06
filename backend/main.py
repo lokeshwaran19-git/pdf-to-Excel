@@ -93,14 +93,18 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 # ── Background Asynchronous Conversion Queue ───────────────────────────────
-# Handles concurrent submissions from 100+ users safely without timeouts,
-# without memory spikes, and with ZERO 502 Bad Gateway errors.
-JOB_QUEUE: asyncio.Queue = asyncio.Queue()
+# maxsize=200 supports 100 concurrent batch jobs + 100 single-file jobs queued
+# at the same time without blocking the HTTP layer.
+JOB_QUEUE: asyncio.Queue = asyncio.Queue(maxsize=200)
 ACTIVE_JOB_ID: Optional[str] = None
+
+# Ordered list of (job_id|batch_id, type) — used to compute accurate queue positions
+QUEUE_ORDER: List[str] = []   # IDs in submission order
 
 # Global in-memory storage for active jobs (store intermediate table data for editing/download)
 JOBS_CACHE: Dict[str, Dict[str, Any]] = {}
 BATCHES_CACHE: Dict[str, Dict[str, Any]] = {}
+
 
 # Ensure working temp directories exist
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -364,6 +368,12 @@ async def queue_worker_loop():
                     JOB_QUEUE.task_done()
                     continue
 
+                # Remove from QUEUE_ORDER now that we're processing it
+                try:
+                    QUEUE_ORDER.remove(batch_id)
+                except ValueError:
+                    pass
+
                 ACTIVE_JOB_ID = f"batch_{batch_id}"
                 batch = BATCHES_CACHE[batch_id]
                 batch["status"] = "processing"
@@ -378,6 +388,12 @@ async def queue_worker_loop():
                 if job_id not in JOBS_CACHE:
                     JOB_QUEUE.task_done()
                     continue
+
+                # Remove from QUEUE_ORDER now that we're processing it
+                try:
+                    QUEUE_ORDER.remove(job_id)
+                except ValueError:
+                    pass
 
                 ACTIVE_JOB_ID = job_id
                 job = JOBS_CACHE[job_id]
@@ -425,6 +441,7 @@ async def queue_worker_loop():
                     pass
             ACTIVE_JOB_ID = None
             gc.collect()
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -681,13 +698,17 @@ async def batch_convert_medical_reports(files: List[UploadFile] = File(...)):
             "error": None
         }
 
+        QUEUE_ORDER.append(batch_id)
         await JOB_QUEUE.put({"type": "batch", "batch_id": batch_id})
+
+        queue_position = len(QUEUE_ORDER) + (1 if ACTIVE_JOB_ID else 0)
 
         return {
             "success": True,
             "batch_id": batch_id,
             "total_files": len(saved_files),
             "status": "queued",
+            "queue_position": queue_position,
             "poll_url": f"/api/batch-status/{batch_id}"
         }
 
@@ -704,7 +725,7 @@ async def batch_convert_medical_reports(files: List[UploadFile] = File(...)):
 def get_batch_status(batch_id: str):
     """
     Ultra-fast batch polling endpoint (responds in <5ms):
-    Returns live progress, completed/failed file counts, current active file, and final result.
+    Returns live progress, completed/failed file counts, current active file, queue position, and final result.
     """
     if batch_id not in BATCHES_CACHE:
         raise HTTPException(status_code=404, detail="Batch job not found or expired.")
@@ -712,10 +733,20 @@ def get_batch_status(batch_id: str):
     batch = BATCHES_CACHE[batch_id]
     status = batch["status"]
 
+    # Compute queue position (1-based index in QUEUE_ORDER + 1 if something is actively processing)
+    queue_position = None
+    if status == "queued":
+        try:
+            idx = QUEUE_ORDER.index(batch_id)
+            queue_position = idx + 1 + (1 if ACTIVE_JOB_ID else 0)
+        except ValueError:
+            queue_position = 1
+
     return {
         "success": status != "failed",
         "batch_id": batch_id,
         "status": status,
+        "queue_position": queue_position,
         "total_files": batch.get("total_files", 0),
         "completed_files": batch.get("completed_files", 0),
         "failed_files": batch.get("failed_files", 0),

@@ -3,35 +3,26 @@
  */
 
 // ─── API Configuration ─────────────────────────────────────────────────────
-// When frontend is served from a different domain (e.g. Cloudflare Workers),
-// set this to your Render backend URL. Leave empty string '' to use same-origin.
-const RENDER_BACKEND_URL = 'https://pdf-to-excel-n2ho.onrender.com';
-
-// Auto-detect:
-// - On Render (onrender.com): use same-origin (empty string)
-// - On localhost / 127.0.0.1: use same-origin (empty string) — local FastAPI serves frontend
-// - Any other remote host (e.g. Cloudflare Workers): use Render backend URL
-const _host = window.location.hostname;
-const API_BASE_URL = (_host === 'localhost' || _host === '127.0.0.1' || _host.includes('onrender.com'))
-  ? ''
-  : RENDER_BACKEND_URL.replace(/\/+$/, '');
+// The Cloudflare Worker proxies all /api/* requests to the Render backend.
+// So from the browser's perspective, the API is always same-origin — no CORS.
+// On localhost the local FastAPI server serves /api/* directly (also same-origin).
+const API_BASE_URL = ''; // always same-origin — Worker handles the proxy
 // ───────────────────────────────────────────────────────────────────────────
+
 
 // ── Silent Render warmup ping ───────────────────────────────────────────────
 // Render free tier sleeps after 15 min of inactivity. Cold-start takes 30-60s.
-// Pinging /api/health immediately on page load gives the server time to wake up
-// before the user picks files and clicks Convert — avoiding cold-start 502 errors.
+// Pinging /api/health on page load wakes Render before the user hits Convert.
+// The Cloudflare Worker proxies the request — no CORS needed.
 function _warmupRenderServer() {
-  if (!API_BASE_URL) return; // same-origin (Render or local) — no ping needed
-  fetch(`${API_BASE_URL}/api/health`, { method: 'GET', mode: 'cors' })
+  fetch('/api/health')
     .then(r => r.ok && console.log('[warmup] Render server is awake \u2713'))
     .catch(() => {
-      // Server still sleeping — retry once after 15s
-      setTimeout(() => {
-        fetch(`${API_BASE_URL}/api/health`, { method: 'GET', mode: 'cors' }).catch(() => {});
-      }, 15000);
+      // Server still cold — retry once after 20s
+      setTimeout(() => fetch('/api/health').catch(() => {}), 20000);
     });
 }
+
 
 document.addEventListener('DOMContentLoaded', () => {
   console.log('PDF to Excel SaaS Application Initialized.');

@@ -253,10 +253,15 @@ const BatchUploadManager = {
           const data = await sRes.json();
 
           if (data.status === 'queued') {
-            stageText.textContent = 'Batch queued for processing…';
-            subtitleEl.textContent = 'Waiting in secure conversion queue…';
-            progressFill.style.width = '12%';
-            pctText.textContent = '12%';
+            const pos = data.queue_position || 1;
+            const estMinutes = Math.ceil(pos * 2); // ~2 min per batch on Render
+            stageText.textContent = `Queue Position #${pos} — Waiting to process…`;
+            subtitleEl.textContent = pos > 1
+              ? `${pos - 1} batch${pos - 1 > 1 ? 'es' : ''} ahead of you. Estimated wait: ~${estMinutes} min.`
+              : 'You are next! Starting soon…';
+            progressFill.style.width = '10%';
+            pctText.textContent = '10%';
+
           } else if (data.status === 'processing') {
             const prog = Math.max(15, data.progress || 20);
             progressFill.style.width = `${prog}%`;

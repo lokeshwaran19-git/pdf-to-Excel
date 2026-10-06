@@ -1,0 +1,10 @@
+name = "pdf-to-excel"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Static assets (frontend folder) are served by the Worker via the ASSETS binding.
+# Run: wrangler deploy
+# This uploads everything in ./frontend as static assets.
+[assets]
+directory = "./frontend"
+binding = "ASSETS"
