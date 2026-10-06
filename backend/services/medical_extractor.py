@@ -31,7 +31,7 @@ class MedicalExtractor:
     )
 
     ASSESSMENT_HEADING_REGEX = re.compile(
-        r'^\s*(?:#|\d+[\.\)]\s*)?(?:assessment|assessments)\s*[:\-\.]?\s*$',
+        r'^\s*(?:#|\d+[\.\)]\s*)?assessm[eo0]nts?\s*[:\-\.]?\s*$',
         re.IGNORECASE
     )
 
@@ -78,10 +78,15 @@ class MedicalExtractor:
         source_pages: Dict[str, int] = {}
         confidences: Dict[str, float] = {}
 
+        doc_angle: Optional[int] = None
         try:
-            for page_num, raw_img in PDFService.iter_pdf_pages(pdf_bytes, dpi=96):
+            for page_num, raw_img in PDFService.iter_pdf_pages(pdf_bytes, dpi=72):
                 # 1. Automatic Orientation Detection & Single-Pass OCR
-                angle, rot_flag, ocr_items = detect_orientation_and_ocr(raw_img, ocr_service)
+                angle, rot_flag, ocr_items = detect_orientation_and_ocr(
+                    raw_img, ocr_service, preferred_angle=doc_angle
+                )
+                if doc_angle is None:
+                    doc_angle = angle
                 del raw_img
                 gc.collect()
 

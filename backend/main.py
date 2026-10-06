@@ -284,6 +284,7 @@ def _run_batch_conversion_sync(batch_id: str):
             del pdf_bytes
             cleanup_file(fpath)
             gc.collect()
+            time.sleep(0.3)
 
             if record.success:
                 completed += 1

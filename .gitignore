@@ -26,3 +26,6 @@ test_*.xlsx
 .idea/
 .DS_Store
 Thumbs.db
+.wrangler/
+test_*.py
+

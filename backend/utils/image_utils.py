@@ -1,6 +1,12 @@
+import gc
 import cv2
 import numpy as np
 from typing import Tuple, List, Optional, Dict, Any
+
+# Maximum image dimension (pixels) before OCR — prevents OOM on Render 512MB RAM.
+# 72 DPI standard page = 612×792 px, well under this limit.
+# Scanned PDFs or high-res images get downscaled here before any OCR is run.
+MAX_OCR_DIMENSION = 900
 
 def rotate_image(image: np.ndarray, angle_deg: int) -> np.ndarray:
     """Rotate an image by 0, 90, 180, or 270 degrees clockwise."""
@@ -61,19 +67,30 @@ def detect_orientation_and_ocr(image: np.ndarray, ocr_engine, preferred_angle: O
         180: cv2.ROTATE_180,
         270: cv2.ROTATE_90_COUNTERCLOCKWISE
     }
-    
+
     target_keywords = [
-        'overreader', 'patient id', 'patient full', 'date of birth', 
-        'visit number', 'order number', 'acquisition', 'test type', 
+        'overreader', 'patient id', 'patient full', 'date of birth',
+        'visit number', 'order number', 'acquisition', 'test type',
         'resting ecg', 'ecg', 'cardiology',
         'patient', 'dob', 'assessment', 'assessments', 'visit code', 'medical'
     ]
 
-    # Fast path: If preferred orientation is already established for this document, test it directly
+    # ── Memory guard: cap longest edge to MAX_OCR_DIMENSION before any OCR ──
+    # Medical PDFs at 72 DPI → 612×792 px — already under limit (no-op).
+    # High-DPI or scanned PDFs get safely downscaled here to prevent OOM on Render.
+    h_orig, w_orig = image.shape[:2]
+    max_dim = max(h_orig, w_orig)
+    if max_dim > MAX_OCR_DIMENSION:
+        scale_factor = MAX_OCR_DIMENSION / max_dim
+        image = cv2.resize(image, (int(w_orig * scale_factor), int(h_orig * scale_factor)), interpolation=cv2.INTER_AREA)
+
+    # Fast path: preferred orientation already established for this document
     if preferred_angle is not None:
         rot_img = rotate_image(image, preferred_angle) if preferred_angle != 0 else image
         proc_img = preprocess_image(rot_img)
         ocr_items = ocr_engine.run_ocr(proc_img)
+        del proc_img
+        gc.collect()
         if len(ocr_items) > 5:
             return preferred_angle, rotation_flags[preferred_angle], ocr_items
 
@@ -86,6 +103,8 @@ def detect_orientation_and_ocr(image: np.ndarray, ocr_engine, preferred_angle: O
         boxes, _ = ocr_engine.engine.text_detector(preview_img)
     except Exception:
         boxes = None
+    del preview_img
+    gc.collect()
 
     if boxes is not None and len(boxes) > 0:
         w_h = []
@@ -105,23 +124,36 @@ def detect_orientation_and_ocr(image: np.ndarray, ocr_engine, preferred_angle: O
     rot1 = rotate_image(image, cand1) if cand1 != 0 else image
     proc1 = preprocess_image(rot1)
     ocr_items1 = ocr_engine.run_ocr(proc1)
+    del proc1
+    gc.collect()
     full_text1 = " ".join([it['text'].lower() for it in ocr_items1])
     kw1 = sum(1 for kw in target_keywords if kw in full_text1)
 
     if kw1 >= 2 or len(candidates) == 1:
         return cand1, rotation_flags[cand1], ocr_items1
 
+    # Free candidate 1 images before testing candidate 2
+    del rot1, full_text1
+    gc.collect()
+
     # Test candidate 2 (180° flip)
     cand2 = candidates[1]
     rot2 = rotate_image(image, cand2) if cand2 != 0 else image
     proc2 = preprocess_image(rot2)
     ocr_items2 = ocr_engine.run_ocr(proc2)
+    del proc2
+    gc.collect()
     full_text2 = " ".join([it['text'].lower() for it in ocr_items2])
     kw2 = sum(1 for kw in target_keywords if kw in full_text2)
 
     if kw2 > kw1:
+        del ocr_items1
+        gc.collect()
         return cand2, rotation_flags[cand2], ocr_items2
+    del ocr_items2
+    gc.collect()
     return cand1, rotation_flags[cand1], ocr_items1
+
 
 def detect_orientation(image: np.ndarray, ocr_engine, preferred_angle: Optional[int] = None) -> Tuple[int, Optional[int]]:
     """Backward compatible wrapper returning (angle, rot_flag)."""
