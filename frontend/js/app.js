@@ -17,8 +17,25 @@ const API_BASE_URL = (_host === 'localhost' || _host === '127.0.0.1' || _host.in
   : RENDER_BACKEND_URL.replace(/\/+$/, '');
 // ───────────────────────────────────────────────────────────────────────────
 
+// ── Silent Render warmup ping ───────────────────────────────────────────────
+// Render free tier sleeps after 15 min of inactivity. Cold-start takes 30-60s.
+// Pinging /api/health immediately on page load gives the server time to wake up
+// before the user picks files and clicks Convert — avoiding cold-start 502 errors.
+function _warmupRenderServer() {
+  if (!API_BASE_URL) return; // same-origin (Render or local) — no ping needed
+  fetch(`${API_BASE_URL}/api/health`, { method: 'GET', mode: 'cors' })
+    .then(r => r.ok && console.log('[warmup] Render server is awake \u2713'))
+    .catch(() => {
+      // Server still sleeping — retry once after 15s
+      setTimeout(() => {
+        fetch(`${API_BASE_URL}/api/health`, { method: 'GET', mode: 'cors' }).catch(() => {});
+      }, 15000);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   console.log('PDF to Excel SaaS Application Initialized.');
+  _warmupRenderServer(); // fire-and-forget warmup — runs in background
 
   const hamburgerBtn = document.getElementById('hamburger-btn');
   const mobileNav    = document.getElementById('mobile-nav');

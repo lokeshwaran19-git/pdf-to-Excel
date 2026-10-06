@@ -34,6 +34,7 @@ app = FastAPI(title="PDF to Excel Extraction API", version="1.0.0")
 # ── Allowed CORS origins ────────────────────────────────────────────────────
 ALLOWED_ORIGINS = [
     "https://pdf-to-excel.lokeshlap2828.workers.dev",
+    "https://pdf-to-excel.enoahconverters.workers.dev",
     "https://pdf-to-excel-n2ho.onrender.com",
     "http://localhost:3000",
     "http://localhost:5173",

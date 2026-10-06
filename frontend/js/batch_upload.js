@@ -180,14 +180,44 @@ const BatchUploadManager = {
     let pollInterval = null;
 
     try {
-      // 1. Submit batch job (immediate response in <150ms)
-      const res = await fetch(`${API_BASE_URL}/api/batch-convert`, {
-        method: 'POST',
-        body: formData
-      });
+      // 1. Submit batch job — retry on 502/503 (Render cold start)
+      let res = null;
+      const MAX_SUBMIT_RETRIES = 4;
+      for (let attempt = 1; attempt <= MAX_SUBMIT_RETRIES; attempt++) {
+        try {
+          stageText.textContent = attempt === 1
+            ? `Uploading ${this.selectedFiles.length} medical PDFs…`
+            : `Server waking up… retrying (${attempt}/${MAX_SUBMIT_RETRIES})`;
+          subtitleEl.textContent = attempt === 1
+            ? 'Connecting to asynchronous batch queue…'
+            : 'Render free-tier cold start detected — please wait ~30s…';
 
-      if (!res.ok) {
-        let errMsg = `Server error (${res.status})`;
+          res = await fetch(`${API_BASE_URL}/api/batch-convert`, {
+            method: 'POST',
+            body: formData
+          });
+
+          if (res.status === 502 || res.status === 503 || res.status === 504) {
+            if (attempt < MAX_SUBMIT_RETRIES) {
+              await new Promise(r => setTimeout(r, 8000)); // wait 8s before retry
+              continue;
+            }
+          }
+          break; // success or non-retryable error
+        } catch (fetchErr) {
+          // Network-level failure (server offline)
+          if (attempt < MAX_SUBMIT_RETRIES) {
+            stageText.textContent = `Server waking up… retrying (${attempt}/${MAX_SUBMIT_RETRIES})`;
+            subtitleEl.textContent = 'Waiting for Render server to start…';
+            await new Promise(r => setTimeout(r, 8000));
+          } else {
+            throw fetchErr;
+          }
+        }
+      }
+
+      if (!res || !res.ok) {
+        let errMsg = `Server error (${res ? res.status : 'no response'})`;
         try {
           const errData = await res.json();
           if (errData && errData.detail) errMsg = errData.detail;
@@ -199,11 +229,26 @@ const BatchUploadManager = {
       const batchId = initData.batch_id;
       if (!batchId) throw new Error('Did not receive a valid Batch ID from server.');
 
-      // 2. Poll batch status
+      // 2. Poll batch status — silently skip transient 502s
+      let consecutivePollErrors = 0;
+      const MAX_POLL_ERRORS = 5;
+
       const pollBatch = async () => {
         try {
           const sRes = await fetch(`${API_BASE_URL}/api/batch-status/${batchId}?_t=${Date.now()}`);
+
+          // Transient 502 during poll — Render hiccup, skip silently
+          if (sRes.status === 502 || sRes.status === 503 || sRes.status === 504) {
+            consecutivePollErrors++;
+            if (consecutivePollErrors >= MAX_POLL_ERRORS) {
+              throw new Error('Server is unavailable after multiple retries. Please try again.');
+            }
+            stageText.textContent = `Server busy… retrying poll (${consecutivePollErrors}/${MAX_POLL_ERRORS})`;
+            return; // keep interval running
+          }
+
           if (!sRes.ok) return;
+          consecutivePollErrors = 0; // reset on success
 
           const data = await sRes.json();
 
@@ -217,7 +262,7 @@ const BatchUploadManager = {
             progressFill.style.width = `${prog}%`;
             pctText.textContent = `${prog}%`;
             stageText.textContent = data.stage || `Processing batch (${data.completed_files} of ${data.total_files} done)…`;
-            subtitleEl.textContent = data.current_file 
+            subtitleEl.textContent = data.current_file
               ? `Scanning all pages of ${data.current_file} for Patient Info, Assessments & Visit Code…`
               : 'Extracting medical sections across pages…';
           } else if (data.status === 'completed') {
@@ -254,6 +299,7 @@ const BatchUploadManager = {
       convertBtn.querySelector('.btn-convert-text').textContent = 'Convert All to Excel';
     }
   },
+
 
   async _handleBatchSuccess(result) {
     const convCard = document.getElementById('conversion-card');

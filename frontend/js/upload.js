@@ -159,14 +159,43 @@ const UploadManager = {
     let pollInterval = null;
 
     try {
-      // 1. Submit job (immediate 200 OK in <150ms — eliminates 502 Bad Gateway timeouts)
-      const response = await fetch(`${API_BASE_URL}/api/convert`, {
-        method: 'POST',
-        body: formData,
-      });
+      // 1. Submit job — retry on 502/503 (Render free-tier cold start)
+      let response = null;
+      const MAX_SUBMIT_RETRIES = 4;
+      for (let attempt = 1; attempt <= MAX_SUBMIT_RETRIES; attempt++) {
+        try {
+          stageText.textContent = attempt === 1
+            ? 'Submitting document…'
+            : `Server waking up… retrying (${attempt}/${MAX_SUBMIT_RETRIES})`;
+          subtitleEl.textContent = attempt === 1
+            ? 'Connecting to extraction queue…'
+            : 'Render free-tier cold start detected — please wait ~30s…';
 
-      if (!response.ok) {
-        let errMsg = `Server error (${response.status}: ${response.statusText || 'Unknown'})`;
+          response = await fetch(`${API_BASE_URL}/api/convert`, {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (response.status === 502 || response.status === 503 || response.status === 504) {
+            if (attempt < MAX_SUBMIT_RETRIES) {
+              await new Promise(r => setTimeout(r, 8000));
+              continue;
+            }
+          }
+          break;
+        } catch (fetchErr) {
+          if (attempt < MAX_SUBMIT_RETRIES) {
+            stageText.textContent = `Server waking up… retrying (${attempt}/${MAX_SUBMIT_RETRIES})`;
+            subtitleEl.textContent = 'Waiting for Render server to start…';
+            await new Promise(r => setTimeout(r, 8000));
+          } else {
+            throw fetchErr;
+          }
+        }
+      }
+
+      if (!response || !response.ok) {
+        let errMsg = `Server error (${response ? response.status : 'no response'}: ${response ? response.statusText || 'Unknown' : 'Network error'})`;
         try {
           const errData = await response.json();
           if (errData && errData.detail) errMsg = errData.detail;
@@ -187,11 +216,26 @@ const UploadManager = {
         throw new Error('Server did not return a valid Job ID.');
       }
 
-      // 2. Poll job status in background until complete
+      // 2. Poll job status — silently skip transient 502s
+      let consecutivePollErrors = 0;
+      const MAX_POLL_ERRORS = 5;
+
       const pollJob = async () => {
         try {
           const statusRes = await fetch(`${API_BASE_URL}/api/status/${jobId}?_t=${Date.now()}`);
+
+          // Transient 502 — skip silently, keep polling
+          if (statusRes.status === 502 || statusRes.status === 503 || statusRes.status === 504) {
+            consecutivePollErrors++;
+            if (consecutivePollErrors >= MAX_POLL_ERRORS) {
+              throw new Error('Server is unavailable after multiple retries. Please try again.');
+            }
+            stageText.textContent = `Server busy… retrying poll (${consecutivePollErrors}/${MAX_POLL_ERRORS})`;
+            return;
+          }
+
           if (!statusRes.ok) return;
+          consecutivePollErrors = 0;
 
           const data = await statusRes.json();
 
@@ -251,6 +295,7 @@ const UploadManager = {
       convertBtn.querySelector('.btn-convert-text').textContent = 'Convert PDF';
     }
   },
+
 
   async _handleConversionSuccess(result) {
     const convCard     = document.getElementById('conversion-card');
