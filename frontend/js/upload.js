@@ -218,7 +218,7 @@ const UploadManager = {
 
       // 2. Poll job status — silently skip transient 502s
       let consecutivePollErrors = 0;
-      const MAX_POLL_ERRORS = 5;
+      const MAX_POLL_ERRORS = 15;
 
       const pollJob = async () => {
         try {

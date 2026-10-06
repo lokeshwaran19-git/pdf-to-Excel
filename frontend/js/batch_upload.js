@@ -231,7 +231,7 @@ const BatchUploadManager = {
 
       // 2. Poll batch status — silently skip transient 502s
       let consecutivePollErrors = 0;
-      const MAX_POLL_ERRORS = 5;
+      const MAX_POLL_ERRORS = 15;
 
       const pollBatch = async () => {
         try {
